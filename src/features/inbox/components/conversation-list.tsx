@@ -7,13 +7,19 @@ import {
   Instagram,
   Search,
   X,
-  Inbox,
   Clock,
   MessageCircle,
   Hourglass,
   CheckCircle2,
+  SlidersHorizontal,
+  Check,
 } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect } from 'react';
+import {
+  Popover,
+  PopoverButton,
+  PopoverPanel,
+} from '@headlessui/react';
 import { inboxService, type Conversation } from '../services/inbox.service';
 
 const channelIcons: Record<string, React.ElementType> = {
@@ -30,8 +36,7 @@ const statusColors: Record<string, string> = {
   CLOSED: 'bg-zinc-300 dark:bg-zinc-600',
 };
 
-const filters = [
-  { label: 'Todos', value: '', icon: Inbox },
+const statusOptions = [
   { label: 'Pendentes', value: 'PENDING', icon: Clock },
   { label: 'Abertos', value: 'OPEN', icon: MessageCircle },
   { label: 'Aguardando', value: 'WAITING', icon: Hourglass },
@@ -44,11 +49,27 @@ interface ConversationListProps {
 }
 
 export function ConversationList({ activeId, onSelect }: ConversationListProps) {
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilters, setStatusFilters] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
+  const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const toggleStatus = useCallback((value: string) => {
+    setStatusFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) {
+        next.delete(value);
+      } else {
+        next.add(value);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearStatusFilters = useCallback(() => setStatusFilters(new Set()), []);
+
+  const statusFilterKey = Array.from(statusFilters).sort().join(',');
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
@@ -61,10 +82,10 @@ export function ConversationList({ activeId, onSelect }: ConversationListProps) 
   }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['conversations', statusFilter, debouncedSearch],
+    queryKey: ['conversations', statusFilterKey, debouncedSearch],
     queryFn: () => {
       const params: Record<string, string> = { limit: '50' };
-      if (statusFilter) params.status = statusFilter;
+      if (statusFilters.size > 0) params.status = Array.from(statusFilters).join(',');
       if (debouncedSearch) params.search = debouncedSearch;
       return inboxService.getConversations(params);
     },
@@ -94,9 +115,9 @@ export function ConversationList({ activeId, onSelect }: ConversationListProps) 
 
   return (
     <div className="flex h-full w-80 flex-col border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      {/* Search */}
-      <div className="px-3 pt-3">
-        <div className="group relative">
+      {/* Search + Filter */}
+      <div className="flex items-center gap-1.5 px-3 pt-3 pb-2">
+        <div className="group relative flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within:text-primary" />
           <input
             ref={searchRef}
@@ -115,33 +136,104 @@ export function ConversationList({ activeId, onSelect }: ConversationListProps) 
             </button>
           )}
         </div>
+
+        <Popover className="relative">
+          <PopoverButton className={`relative flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors outline-none data-[open]:bg-zinc-100 data-[open]:text-zinc-600 dark:data-[open]:bg-zinc-800 dark:data-[open]:text-zinc-300 ${
+            statusFilters.size > 0
+              ? 'bg-primary/10 text-primary dark:bg-primary/20 data-[open]:bg-primary/10 data-[open]:text-primary dark:data-[open]:bg-primary/20 dark:data-[open]:text-primary'
+              : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300'
+          }`}>
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            {statusFilters.size > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
+                {statusFilters.size}
+              </span>
+            )}
+          </PopoverButton>
+
+          <PopoverPanel
+            anchor="bottom end"
+            transition
+            className="z-50 mt-1.5 w-48 rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
+          >
+            <div>
+              <p className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                Status
+              </p>
+              {statusOptions.map((f) => {
+                const isActive = statusFilters.has(f.value);
+                const Icon = f.icon;
+                return (
+                  <button
+                    key={f.value}
+                    onClick={() => toggleStatus(f.value)}
+                    className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                      isActive
+                        ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
+                        : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
+                    }`}
+                  >
+                    <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                      isActive
+                        ? 'border-primary bg-primary text-white'
+                        : 'border-zinc-300 dark:border-zinc-600'
+                    }`}>
+                      {isActive && <Check className="h-2.5 w-2.5" />}
+                    </div>
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="flex-1">{f.label}</span>
+                  </button>
+                );
+              })}
+              {statusFilters.size > 0 && (
+                <>
+                  <div className="mx-2 my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                  <button
+                    onClick={clearStatusFilters}
+                    className="flex w-full items-center justify-center gap-1 rounded-md px-2.5 py-1.5 text-[12px] text-zinc-400 transition-colors hover:bg-zinc-50 hover:text-zinc-600 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-300"
+                  >
+                    <X className="h-3 w-3" />
+                    Limpar filtros
+                  </button>
+                </>
+              )}
+            </div>
+          </PopoverPanel>
+        </Popover>
       </div>
 
-      {/* Filter tabs */}
-      <div className="relative px-3 py-2">
-        <nav className="scrollbar-none flex gap-0.5 overflow-x-auto" role="tablist">
-          {filters.map((f) => {
-            const isActive = statusFilter === f.value;
-            const Icon = f.icon;
+      {/* Active filter chips */}
+      {statusFilters.size > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+          {Array.from(statusFilters).map((value) => {
+            const option = statusOptions.find((f) => f.value === value);
+            if (!option) return null;
             return (
-              <button
-                key={f.value}
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setStatusFilter(f.value)}
-                className={`relative flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium tracking-wide transition-all duration-150 ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-300'
-                }`}
+              <span
+                key={value}
+                className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary dark:bg-primary/20"
               >
-                <Icon className="h-3 w-3" />
-                <span>{f.label}</span>
-              </button>
+                {option.label}
+                <button
+                  onClick={() => toggleStatus(value)}
+                  className="rounded-full p-0.5 transition-colors hover:bg-primary/20 dark:hover:bg-primary/30"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
             );
           })}
-        </nav>
-      </div>
+          {statusFilters.size > 1 && (
+            <button
+              onClick={clearStatusFilters}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            >
+              <X className="h-2.5 w-2.5" />
+              Limpar
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Divider */}
       <div className="mx-3 border-t border-zinc-100 dark:border-zinc-800/60" />
@@ -166,9 +258,9 @@ export function ConversationList({ activeId, onSelect }: ConversationListProps) 
             <p className="mt-3 text-[13px] font-medium text-zinc-400 dark:text-zinc-500">
               Nenhuma conversa encontrada
             </p>
-            {(statusFilter || search) && (
+            {(statusFilters.size > 0 || search) && (
               <button
-                onClick={() => { setStatusFilter(''); handleSearchChange(''); }}
+                onClick={() => { clearStatusFilters(); handleSearchChange(''); }}
                 className="mt-2 text-xs text-primary hover:underline"
               >
                 Limpar filtros

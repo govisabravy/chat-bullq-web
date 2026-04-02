@@ -10,6 +10,7 @@ import {
   Building2,
   ChevronUp,
 } from 'lucide-react';
+
 import { useAuthStore } from '@/stores/auth-store';
 import { Avatar } from '@/components/ui/avatar';
 import {
@@ -35,7 +36,6 @@ const navItems = [
   { href: '/inbox', label: 'Inbox', icon: MessageSquare },
   { href: '/contacts', label: 'Contatos', icon: Users },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
 export function AppSidebar() {
