@@ -42,6 +42,10 @@ export interface Conversation {
   assignedTo: AgentInfo | null;
   messages: LastMessage[];
   unreadCount?: number;
+  aiPaused?: boolean;
+  aiPausedAt?: string | null;
+  aiPausedByUserId?: string | null;
+  activeAiAgentId?: string | null;
 }
 
 export interface Message {
@@ -148,6 +152,14 @@ export const inboxService = {
 
   async getStatusCounts(): Promise<Record<string, number>> {
     const { data } = await api.get('/conversations/counts');
+    return data.data;
+  },
+  async pauseAi(conversationId: string): Promise<Conversation> {
+    const { data } = await api.post<{ data: Conversation }>(`/conversations/${conversationId}/pause-ai`);
+    return data.data;
+  },
+  async resumeAi(conversationId: string): Promise<Conversation> {
+    const { data } = await api.post<{ data: Conversation }>(`/conversations/${conversationId}/resume-ai`);
     return data.data;
   },
 };

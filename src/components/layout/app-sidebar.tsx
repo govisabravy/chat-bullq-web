@@ -9,6 +9,7 @@ import {
   ChevronsUpDown,
   Building2,
   ChevronUp,
+  Bot,
 } from 'lucide-react';
 
 import { useAuthStore } from '@/stores/auth-store';
@@ -36,6 +37,7 @@ const navItems = [
   { href: '/inbox', label: 'Inbox', icon: MessageSquare },
   { href: '/contacts', label: 'Contatos', icon: Users },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/settings/ai-agents', label: 'Agentes IA', icon: Bot },
 ];
 
 export function AppSidebar() {

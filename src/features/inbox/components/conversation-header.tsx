@@ -9,7 +9,10 @@ import {
   MessageSquare,
   Smartphone,
   Instagram,
+  PauseCircle,
+  PlayCircle,
 } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { inboxService, type Conversation } from '../services/inbox.service';
 
 const channelIcons: Record<string, React.ElementType> = {
@@ -39,6 +42,28 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
       setIsLoading(false);
     }
   };
+
+  const queryClient = useQueryClient();
+
+  const pauseMutation = useMutation({
+    mutationFn: () => inboxService.pauseAi(conversation.id),
+    onSuccess: () => {
+      toast.success('IA pausada — você assumiu a conversa');
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      onUpdate();
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Erro ao pausar IA'),
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: () => inboxService.resumeAi(conversation.id),
+    onSuccess: () => {
+      toast.success('IA retomada');
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      onUpdate();
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Erro ao retomar IA'),
+  });
 
   return (
     <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
@@ -75,6 +100,26 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
       </div>
 
       <div className="flex items-center gap-1.5">
+        {conversation.activeAiAgentId && !conversation.aiPaused && (
+          <button
+            onClick={() => pauseMutation.mutate()}
+            disabled={pauseMutation.isPending}
+            className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/30"
+          >
+            <PauseCircle className="h-3.5 w-3.5" />
+            Pausar IA
+          </button>
+        )}
+        {conversation.activeAiAgentId && conversation.aiPaused && (
+          <button
+            onClick={() => resumeMutation.mutate()}
+            disabled={resumeMutation.isPending}
+            className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
+          >
+            <PlayCircle className="h-3.5 w-3.5" />
+            Retomar IA
+          </button>
+        )}
         {conversation.status !== 'CLOSED' && !conversation.assignedToId && (
           <button
             onClick={() =>
