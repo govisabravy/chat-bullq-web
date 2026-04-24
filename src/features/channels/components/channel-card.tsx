@@ -11,10 +11,15 @@ import {
   Power,
   PowerOff,
   Loader2,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Channel } from '../services/channels.service';
 import { channelsService } from '../services/channels.service';
+import { useChannelSync } from '../hooks/use-channel-sync';
 
 const channelTypeMap: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   WHATSAPP_ZAPPFY: { label: 'WhatsApp (Zappfy)', icon: MessageSquare, color: 'bg-green-500' },
@@ -32,13 +37,14 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const meta = channelTypeMap[channel.type] || { label: channel.type, icon: MessageSquare, color: 'bg-gray-500' };
   const Icon = meta.icon;
+  const sync = useChannelSync({ channelId: channel.id, channelType: channel.type });
 
   const handleTest = async () => {
     setIsTesting(true);
     try {
       const result = await channelsService.testConnection(channel.id);
       if (result.success) {
-        toast.success(`Conexão OK: ${result.status}`);
+        toast.success(`Conexão OK: ${typeof result.status === 'string' ? result.status : JSON.stringify(result.status)}`);
       } else {
         toast.error(`Falha: ${result.error}`);
       }
@@ -60,15 +66,48 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Tem certeza que deseja remover este canal?')) return;
+    const typed = prompt(
+      `Para remover o canal, digite o nome exato:\n\n"${channel.name}"\n\nMensagens e conversas são preservadas no histórico, mas o canal ficará inativo.`,
+    );
+    if (typed == null) return;
+    if (typed.trim() !== channel.name) {
+      toast.error('Nome não confere — cancelado.');
+      return;
+    }
     try {
-      await channelsService.remove(channel.id);
+      await channelsService.remove(channel.id, typed.trim());
       toast.success('Canal removido');
       onUpdate();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao remover canal');
     }
   };
+
+  const handleSync = async () => {
+    try {
+      await sync.startSync();
+      toast.success('Sincronização iniciada');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao iniciar sincronização');
+    }
+  };
+
+  const handleCancelSync = async () => {
+    try {
+      await sync.cancelSync();
+      toast.success('Sincronização cancelada');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao cancelar sincronização');
+    }
+  };
+
+  const isSyncRunning = sync.job?.status === 'RUNNING' || sync.job?.status === 'PENDING';
+  const isSyncCompleted = sync.job?.status === 'COMPLETED';
+  const isSyncFailed = sync.job?.status === 'FAILED';
+  const progressPct =
+    sync.job && sync.job.conversationsTotal > 0
+      ? Math.min(100, Math.round((sync.job.conversationsImported / sync.job.conversationsTotal) * 100))
+      : 0;
 
   return (
     <div className="relative flex items-start gap-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
@@ -91,7 +130,58 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
           </span>
         </div>
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{meta.label}</p>
-        <div className="mt-3 flex items-center gap-2">
+
+        {sync.supported && sync.job && (
+          <div className="mt-3">
+            {isSyncRunning && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="inline-flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Sincronizando
+                    {sync.job.conversationsTotal > 0 && (
+                      <span className="text-zinc-500 dark:text-zinc-400">
+                        {sync.job.conversationsImported}/{sync.job.conversationsTotal} conversas · {sync.job.messagesImported} msgs
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    onClick={handleCancelSync}
+                    className="text-xs font-medium text-zinc-500 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <div
+                    className="h-full bg-pink-500 transition-all duration-300"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {isSyncCompleted && (
+              <p className="inline-flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-3 w-3" />
+                {sync.job.conversationsImported} conversas, {sync.job.messagesImported} mensagens sincronizadas
+              </p>
+            )}
+            {isSyncFailed && (
+              <p className="inline-flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+                <AlertCircle className="h-3 w-3" />
+                Sync falhou: {sync.job.errorMessage || 'erro desconhecido'}
+              </p>
+            )}
+            {sync.job.status === 'CANCELLED' && (
+              <p className="inline-flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                <XCircle className="h-3 w-3" />
+                Sincronização cancelada
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             onClick={handleTest}
             disabled={isTesting}
@@ -104,6 +194,20 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
             )}
             Testar Conexão
           </button>
+          {sync.supported && (
+            <button
+              onClick={handleSync}
+              disabled={isSyncRunning || sync.loading}
+              className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              {sync.loading || isSyncRunning ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              Sincronizar
+            </button>
+          )}
           <button
             onClick={handleToggle}
             className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"

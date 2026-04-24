@@ -1,22 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   UserPlus,
   XCircle,
   RotateCcw,
-  MessageSquare,
-  Smartphone,
-  Instagram,
+  RefreshCw,
 } from 'lucide-react';
 import { inboxService, type Conversation } from '../services/inbox.service';
-
-const channelIcons: Record<string, React.ElementType> = {
-  WHATSAPP_ZAPPFY: MessageSquare,
-  WHATSAPP_OFFICIAL: Smartphone,
-  INSTAGRAM: Instagram,
-};
 
 interface ConversationHeaderProps {
   conversation: Conversation;
@@ -24,9 +17,22 @@ interface ConversationHeaderProps {
 }
 
 export function ConversationHeader({ conversation, onUpdate }: ConversationHeaderProps) {
+  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
-  const Icon = channelIcons[conversation.channel.type] || MessageSquare;
+  const [isSyncing, setIsSyncing] = useState(false);
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['messages', conversation.id] }),
+        queryClient.refetchQueries({ queryKey: ['conversations'] }),
+      ]);
+      toast.success('Mensagens sincronizadas');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   const handleAction = async (action: () => Promise<any>, successMsg: string) => {
     setIsLoading(true);
     try {
@@ -47,24 +53,24 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
           {conversation.contact.name?.slice(0, 2).toUpperCase() || '??'}
         </div>
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              {conversation.contact.name || conversation.contact.phone || 'Desconhecido'}
-            </span>
-            <Icon className="h-3.5 w-3.5 text-zinc-400" />
+          <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {conversation.contact.name || conversation.contact.phone || 'Desconhecido'}
           </div>
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
-            {conversation.contact.phone && <span>{conversation.contact.phone}</span>}
-            {conversation.protocol && (
-              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-mono dark:bg-zinc-800">
-                #{conversation.protocol}
-              </span>
-            )}
-          </div>
+          {conversation.contact.phone && conversation.contact.name && (
+            <div className="text-xs text-zinc-500">{conversation.contact.phone}</div>
+          )}
         </div>
       </div>
 
       <div className="flex items-center gap-1.5">
+        <button
+          onClick={handleSync}
+          disabled={isSyncing}
+          title="Sincronizar mensagens"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+        </button>
         {conversation.status !== 'CLOSED' && !conversation.assignedToId && (
           <button
             onClick={() =>

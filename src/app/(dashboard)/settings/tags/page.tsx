@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Pencil, Tags as TagsIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { tagsService, type Tag } from '@/features/settings/services/tags.service';
+import { useOrgId } from '@/hooks/use-org-query-key';
 
 const PRESET_COLORS = ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#10b981', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#6b7280'];
 
@@ -16,8 +17,9 @@ export default function SettingsTagsPage() {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
 
+  const orgId = useOrgId();
   const { data: tags, isLoading } = useQuery({
-    queryKey: ['tags'],
+    queryKey: ['tags', orgId],
     queryFn: () => tagsService.list(),
   });
 

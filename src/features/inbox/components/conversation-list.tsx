@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
   MessageSquare,
   Smartphone,
@@ -13,17 +13,42 @@ import {
   CheckCircle2,
   SlidersHorizontal,
   Check,
+  PanelLeftOpen,
+  UserCheck,
+  XCircle,
+  RotateCcw,
+  Loader2,
+  ChevronDown,
+  Inbox,
+  Users,
+  User,
 } from 'lucide-react';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSidebarCollapse } from '@/components/ui/sidebar-layout';
 import {
   Popover,
   PopoverButton,
   PopoverPanel,
 } from '@headlessui/react';
 import { inboxService, type Conversation } from '../services/inbox.service';
+import { channelsService } from '@/features/channels/services/channels.service';
+import { ZappfyIcon } from '@/components/ui/icons';
+import { useOrgId } from '@/hooks/use-org-query-key';
+import { useSocket } from '../hooks/use-socket';
+import { useAuthStore } from '@/stores/auth-store';
+import { useInboxPreferences } from '../hooks/use-inbox-preferences';
+import { ConversationContextMenu } from './conversation-context-menu';
+
+type ScopeFilter = 'ALL' | 'MINE';
+
+const scopeOptions: { label: string; value: ScopeFilter; icon: React.ElementType }[] = [
+  { label: 'Todas as conversas', value: 'ALL', icon: Users },
+  { label: 'Minhas conversas', value: 'MINE', icon: User },
+];
 
 const channelIcons: Record<string, React.ElementType> = {
-  WHATSAPP_ZAPPFY: MessageSquare,
+  WHATSAPP_ZAPPFY: ZappfyIcon,
   WHATSAPP_OFFICIAL: Smartphone,
   INSTAGRAM: Instagram,
 };
@@ -49,25 +74,80 @@ interface ConversationListProps {
 }
 
 export function ConversationList({ activeId, onSelect }: ConversationListProps) {
+  const sidebarCtx = useSidebarCollapse();
+  const queryClient = useQueryClient();
+  const orgId = useOrgId();
+  const { on } = useSocket();
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const {
+    preferences: savedPrefs,
+    isLoaded: prefsLoaded,
+    update: updatePrefs,
+  } = useInboxPreferences();
   const [statusFilters, setStatusFilters] = useState<Set<string>>(new Set());
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const [scope, setScope] = useState<ScopeFilter>('ALL');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const hydratedRef = useRef(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    conversation: Conversation;
+    position: { x: number; y: number };
+  } | null>(null);
 
-  const toggleStatus = useCallback((value: string) => {
-    setStatusFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(value)) {
-        next.delete(value);
-      } else {
-        next.add(value);
-      }
-      return next;
-    });
-  }, []);
+  // Hydrate state from saved preferences once they load
+  useEffect(() => {
+    if (!prefsLoaded || hydratedRef.current) return;
+    hydratedRef.current = true;
+    if (savedPrefs.scope === 'MINE' || savedPrefs.scope === 'ALL') {
+      setScope(savedPrefs.scope);
+    }
+    if (Array.isArray(savedPrefs.statusFilters)) {
+      setStatusFilters(new Set(savedPrefs.statusFilters));
+    }
+    if (savedPrefs.selectedChannelId !== undefined) {
+      setSelectedChannelId(savedPrefs.selectedChannelId ?? null);
+    }
+  }, [prefsLoaded, savedPrefs]);
 
-  const clearStatusFilters = useCallback(() => setStatusFilters(new Set()), []);
+  const toggleStatus = useCallback(
+    (value: string) => {
+      setStatusFilters((prev) => {
+        const next = new Set(prev);
+        if (next.has(value)) next.delete(value);
+        else next.add(value);
+        updatePrefs({ statusFilters: Array.from(next) });
+        return next;
+      });
+    },
+    [updatePrefs],
+  );
+
+  const clearStatusFilters = useCallback(() => {
+    setStatusFilters(new Set());
+    updatePrefs({ statusFilters: [] });
+  }, [updatePrefs]);
+
+  const handleScopeChange = useCallback(
+    (next: ScopeFilter) => {
+      setScope(next);
+      updatePrefs({ scope: next });
+    },
+    [updatePrefs],
+  );
+
+  const handleChannelChange = useCallback(
+    (next: string | null) => {
+      setSelectedChannelId(next);
+      updatePrefs({ selectedChannelId: next });
+    },
+    [updatePrefs],
+  );
 
   const statusFilterKey = Array.from(statusFilters).sort().join(',');
 
@@ -81,24 +161,177 @@ export function ConversationList({ activeId, onSelect }: ConversationListProps) 
     return () => clearTimeout(debounceTimer.current);
   }, []);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['conversations', statusFilterKey, debouncedSearch],
-    queryFn: () => {
-      const params: Record<string, string> = { limit: '50' };
-      if (statusFilters.size > 0) params.status = Array.from(statusFilters).join(',');
-      if (debouncedSearch) params.search = debouncedSearch;
-      return inboxService.getConversations(params);
-    },
-    refetchInterval: 10000,
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const { data: channels = [] } = useQuery({
+    queryKey: ['channels', orgId],
+    queryFn: () => channelsService.list(),
   });
 
-  const conversations = data?.conversations || [];
+  const selectedChannel = useMemo(
+    () => channels.find((c) => c.id === selectedChannelId) ?? null,
+    [channels, selectedChannelId],
+  );
+
+  // Reset scroll when filters/search change
+  useEffect(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0 });
+  }, [statusFilterKey, debouncedSearch, selectedChannelId, scope]);
+
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['conversations', orgId, statusFilterKey, debouncedSearch, selectedChannelId, scope, currentUserId],
+    queryFn: ({ pageParam = 1 }) => {
+      const params: Record<string, string> = { limit: '30', page: String(pageParam) };
+      if (statusFilters.size > 0) params.status = Array.from(statusFilters).join(',');
+      if (debouncedSearch) params.search = debouncedSearch;
+      if (selectedChannelId) params.channelId = selectedChannelId;
+      if (scope === 'MINE' && currentUserId) params.assignedToId = currentUserId;
+      return inboxService.getConversations(params);
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const { page, totalPages } = lastPage.pagination;
+      return page < totalPages ? page + 1 : undefined;
+    },
+    // Realtime (message:new / conversation:updated) drives updates — keep a
+    // slow safety-net poll to cover transient socket drops.
+    refetchInterval: 60000,
+    staleTime: 15000,
+  });
+
+  const conversations = useMemo(
+    () => data?.pages.flatMap((p) => p.conversations) || [],
+    [data],
+  );
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { root: scrollContainerRef.current, rootMargin: '200px' },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setLastClickedIndex(null);
+  }, []);
+
+  const handleConversationClick = useCallback(
+    (conv: Conversation, index: number, e: React.MouseEvent) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          if (lastClickedIndex !== null && conversations.length > 0) {
+            const start = Math.min(lastClickedIndex, index);
+            const end = Math.max(lastClickedIndex, index);
+            for (let i = start; i <= end; i++) {
+              next.add(conversations[i].id);
+            }
+          } else {
+            next.add(conv.id);
+          }
+          return next;
+        });
+        setLastClickedIndex(index);
+        return;
+      }
+
+      if (selectedIds.size > 0) {
+        clearSelection();
+      }
+      onSelect(conv);
+      setLastClickedIndex(index);
+    },
+    [lastClickedIndex, conversations, selectedIds.size, clearSelection, onSelect],
+  );
+
+  const toggleSelect = useCallback((id: string, index: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setLastClickedIndex(index);
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(conversations.map((c) => c.id)));
+  }, [conversations]);
+
+  const invalidateConversations = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+  }, [queryClient]);
+
+  // Realtime: refresh list on inbound messages, imported conversations, or
+  // state transitions (assign/close/reopen/transfer).
+  useEffect(() => {
+    const unsubNew = on('message:new', () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
+    const unsubImported = on('conversation:imported', () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
+    const unsubUpdated = on('conversation:updated', () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
+    return () => {
+      unsubNew?.();
+      unsubImported?.();
+      unsubUpdated?.();
+    };
+  }, [on, queryClient]);
+
+  const handleBulkAction = useCallback(
+    async (action: 'close' | 'assign' | 'reopen') => {
+      const ids = Array.from(selectedIds);
+      if (ids.length === 0) return;
+      setBulkLoading(true);
+      try {
+        if (action === 'close') await inboxService.bulkClose(ids);
+        else if (action === 'assign') await inboxService.bulkAssignToMe(ids);
+        else if (action === 'reopen') await inboxService.bulkReopen(ids);
+        clearSelection();
+        invalidateConversations();
+      } finally {
+        setBulkLoading(false);
+      }
+    },
+    [selectedIds, clearSelection, invalidateConversations],
+  );
 
   const getLastMessagePreview = (conv: Conversation) => {
     const last = conv.messages[0];
     if (!last) return 'Sem mensagens';
     const prefix = last.direction === 'OUTBOUND' ? 'Você: ' : '';
-    return prefix + (last.content?.text || `[${last.type}]`);
+    const rt = (last as any).metadata?.replyTo;
+    const storyPrefix = rt?.story
+      ? rt.story.kind === 'mention'
+        ? '📸 Mencionou no story · '
+        : '📸 Respondeu seu story · '
+      : rt?.ad
+        ? '📢 Respondeu ao anúncio · '
+        : '';
+    return prefix + storyPrefix + (last.content?.text || `[${last.type}]`);
   };
 
   const formatTime = (date: string | null) => {
@@ -115,8 +348,128 @@ export function ConversationList({ activeId, onSelect }: ConversationListProps) 
 
   return (
     <div className="flex h-full w-80 flex-col border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      {/* Scope selector (All / Mine) */}
+      <div className="px-3 pt-3">
+        <Popover className="relative">
+          <PopoverButton className="flex w-full items-center gap-2 rounded-md border border-zinc-200/80 bg-white px-2.5 py-1.5 text-left text-[13px] text-zinc-700 outline-none transition-colors hover:bg-zinc-50 data-[open]:border-primary/40 data-[open]:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:data-[open]:bg-zinc-900">
+            {(() => {
+              const current = scopeOptions.find((o) => o.value === scope) ?? scopeOptions[0];
+              const Icon = current.icon;
+              return <Icon className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />;
+            })()}
+            <span className="flex-1 truncate font-medium">
+              {scopeOptions.find((o) => o.value === scope)?.label ?? 'Todas as conversas'}
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+          </PopoverButton>
+          <PopoverPanel
+            anchor="bottom start"
+            transition
+            className="z-50 mt-1.5 w-[var(--button-width)] rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
+          >
+            {({ close }) => (
+              <>
+                {scopeOptions.map((option) => {
+                  const Icon = option.icon;
+                  const isActive = scope === option.value;
+                  const disabled = option.value === 'MINE' && !currentUserId;
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => { if (!disabled) { handleScopeChange(option.value); close(); } }}
+                      disabled={disabled}
+                      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        isActive
+                          ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
+                          : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="flex-1">{option.label}</span>
+                      {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
+                    </button>
+                  );
+                })}
+              </>
+            )}
+          </PopoverPanel>
+        </Popover>
+      </div>
+
+      {/* Channel selector */}
+      <div className="px-3 pt-2">
+        <Popover className="relative">
+          <PopoverButton className="flex w-full items-center gap-2 rounded-md border border-zinc-200/80 bg-white px-2.5 py-1.5 text-left text-[13px] text-zinc-700 outline-none transition-colors hover:bg-zinc-50 data-[open]:border-primary/40 data-[open]:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:data-[open]:bg-zinc-900">
+            {(() => {
+              const Icon = selectedChannel
+                ? channelIcons[selectedChannel.type] || MessageSquare
+                : Inbox;
+              return <Icon className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />;
+            })()}
+            <span className="flex-1 truncate font-medium">
+              {selectedChannel ? selectedChannel.name : 'Todos os canais'}
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+          </PopoverButton>
+          <PopoverPanel
+            anchor="bottom start"
+            transition
+            className="z-50 mt-1.5 w-[var(--button-width)] rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
+          >
+            {({ close }) => (
+              <>
+                <button
+                  onClick={() => { handleChannelChange(null); close(); }}
+                  className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                    selectedChannelId === null
+                      ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
+                      : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
+                  }`}
+                >
+                  <Inbox className="h-3.5 w-3.5 shrink-0" />
+                  <span className="flex-1">Todos os canais</span>
+                  {selectedChannelId === null && <Check className="h-3.5 w-3.5 text-primary" />}
+                </button>
+                {channels.length > 0 && (
+                  <div className="mx-2 my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                )}
+                {channels.map((channel) => {
+                  const Icon = channelIcons[channel.type] || MessageSquare;
+                  const isActive = selectedChannelId === channel.id;
+                  return (
+                    <button
+                      key={channel.id}
+                      onClick={() => { handleChannelChange(channel.id); close(); }}
+                      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                        isActive
+                          ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
+                          : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="flex-1 truncate">{channel.name}</span>
+                      {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
+                    </button>
+                  );
+                })}
+              </>
+            )}
+          </PopoverPanel>
+        </Popover>
+      </div>
+
       {/* Search + Filter */}
-      <div className="flex items-center gap-1.5 px-3 pt-3 pb-2">
+      <div className="flex items-center gap-1.5 px-3 pt-2 pb-2">
+        {sidebarCtx?.collapsed && (
+          <button
+            type="button"
+            onClick={sidebarCtx.toggle}
+            aria-label="Expandir menu"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-800 dark:hover:text-white"
+          >
+            <PanelLeftOpen className="size-4" />
+          </button>
+        )}
         <div className="group relative flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within:text-primary" />
           <input
@@ -235,11 +588,59 @@ export function ConversationList({ activeId, onSelect }: ConversationListProps) 
         </div>
       )}
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-1.5 border-t border-b border-zinc-200/80 bg-primary/4 px-3 py-1.5 dark:border-zinc-800 dark:bg-primary/10">
+          <button
+            onClick={clearSelection}
+            className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+          <span className="text-[12px] font-medium text-zinc-600 dark:text-zinc-300">
+            {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
+          </span>
+          <button
+            onClick={selectAll}
+            className="text-[11px] text-primary hover:underline"
+          >
+            Todas
+          </button>
+          <div className="flex-1" />
+          <button
+            onClick={() => handleBulkAction('assign')}
+            disabled={bulkLoading}
+            title="Assumir"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-primary/10 hover:text-primary disabled:opacity-50"
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => handleBulkAction('close')}
+            disabled={bulkLoading}
+            title="Fechar"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-500/10"
+          >
+            <XCircle className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => handleBulkAction('reopen')}
+            disabled={bulkLoading}
+            title="Reabrir"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-emerald-50 hover:text-emerald-500 disabled:opacity-50 dark:hover:bg-emerald-500/10"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Divider */}
-      <div className="mx-3 border-t border-zinc-100 dark:border-zinc-800/60" />
+      {selectedIds.size === 0 && (
+        <div className="mx-3 border-t border-zinc-100 dark:border-zinc-800/60" />
+      )}
 
       {/* Conversation list */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-thin">
         {isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex gap-3 px-3 py-3">
@@ -268,46 +669,131 @@ export function ConversationList({ activeId, onSelect }: ConversationListProps) 
             )}
           </div>
         ) : (
-          conversations.map((conv) => {
-            const Icon = channelIcons[conv.channel.type] || MessageSquare;
-            const isActive = conv.id === activeId;
-            return (
-              <button
-                key={conv.id}
-                onClick={() => onSelect(conv)}
-                className={`group flex w-full gap-3 px-3 py-2.5 text-left transition-colors duration-100 ${
-                  isActive
-                    ? 'bg-primary/[0.06] dark:bg-primary/10'
-                    : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/60'
-                }`}
-              >
-                <div className="relative shrink-0">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-[13px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                    {conv.contact.name?.slice(0, 2).toUpperCase() || '??'}
+          <>
+            {conversations.map((conv, index) => {
+              const isActive = conv.id === activeId;
+              const isSelected = selectedIds.has(conv.id);
+              const inSelectionMode = selectedIds.size > 0;
+              return (
+                <button
+                  key={conv.id}
+                  onClick={(e) => handleConversationClick(conv, index, e)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({
+                      conversation: conv,
+                      position: { x: e.clientX, y: e.clientY },
+                    });
+                  }}
+                  className={`group flex w-full gap-3 px-3 py-2.5 text-left transition-colors duration-100 ${
+                    isSelected
+                      ? 'bg-primary/[0.06] dark:bg-primary/10'
+                      : isActive
+                        ? 'bg-primary/[0.06] dark:bg-primary/10'
+                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/60'
+                  }`}
+                >
+                  <div className="relative shrink-0">
+                    {inSelectionMode ? (
+                      <div
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        onClick={(e) => { e.stopPropagation(); toggleSelect(conv.id, index); }}
+                        className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
+                          isSelected
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-zinc-300 bg-zinc-100 text-transparent hover:border-primary/50 dark:border-zinc-600 dark:bg-zinc-800'
+                        }`}
+                      >
+                        <Check className="h-4 w-4" />
+                      </div>
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-[13px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                        {conv.contact.name?.slice(0, 2).toUpperCase() || '??'}
+                      </div>
+                    )}
+                    {(() => {
+                      const ChannelIcon = channelIcons[conv.channel.type] || MessageSquare;
+                      return (
+                        <div className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-[2px] border-white bg-zinc-100 dark:border-zinc-950 dark:bg-zinc-800">
+                          <ChannelIcon className="h-2.5 w-2.5 text-zinc-500 dark:text-zinc-400" />
+                        </div>
+                      );
+                    })()}
                   </div>
-                  <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-[2px] border-white dark:border-zinc-950 ${statusColors[conv.status] || 'bg-zinc-300'}`} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`truncate text-[13px] font-medium ${isActive ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-800 dark:text-zinc-200'}`}>
-                      {conv.contact.name || conv.contact.phone || 'Desconhecido'}
-                    </span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-zinc-400 dark:text-zinc-500">
-                      {formatTime(conv.lastMessageAt)}
-                    </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`truncate text-[13px] font-medium ${isActive || isSelected ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-800 dark:text-zinc-200'}`}>
+                          {conv.contact.name || conv.contact.phone || 'Desconhecido'}
+                        </span>
+                        <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusColors[conv.status] || 'bg-zinc-300'}`} />
+                      </div>
+                      <span className="shrink-0 text-[10px] tabular-nums text-zinc-400 dark:text-zinc-500">
+                        {formatTime(conv.messages[0]?.createdAt ?? conv.lastMessageAt)}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <p className="truncate text-[12px] text-zinc-500 dark:text-zinc-400">
+                        {getLastMessagePreview(conv)}
+                      </p>
+                    </div>
+                    {(conv.tags?.length || conv.contact.tags?.length) ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {conv.tags?.map((t) => (
+                          <span
+                            key={`c-${t.tag.id}`}
+                            title={`Tag na conversa: ${t.tag.name}`}
+                            className="inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-medium"
+                            style={{
+                              backgroundColor: `${t.tag.color}1f`,
+                              color: t.tag.color,
+                            }}
+                          >
+                            <span
+                              className="h-1.5 w-1.5 rounded-full"
+                              style={{ backgroundColor: t.tag.color }}
+                            />
+                            {t.tag.name}
+                          </span>
+                        ))}
+                        {conv.contact.tags?.map((t) => (
+                          <span
+                            key={`ct-${t.tag.id}`}
+                            title={`Tag no contato: ${t.tag.name}`}
+                            className="inline-flex items-center gap-1 rounded-full border border-dashed px-1.5 py-px text-[10px] font-medium"
+                            style={{
+                              borderColor: `${t.tag.color}80`,
+                              color: t.tag.color,
+                            }}
+                          >
+                            {t.tag.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <Icon className="h-3 w-3 shrink-0 text-zinc-300 dark:text-zinc-600" />
-                    <p className="truncate text-[12px] text-zinc-500 dark:text-zinc-400">
-                      {getLastMessagePreview(conv)}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            );
-          })
+                </button>
+              );
+            })}
+            {/* Sentinel for infinite scroll */}
+            <div ref={sentinelRef} className="h-1" />
+            {isFetchingNextPage && (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {contextMenu && (
+        <ConversationContextMenu
+          conversation={contextMenu.conversation}
+          position={contextMenu.position}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

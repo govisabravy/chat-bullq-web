@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Trash2, Shield, ShieldCheck, User, Users } from 'lucide-react';
+import { UserPlus, Trash2, Shield, ShieldCheck, User, Users, Copy, Link, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { membersService, type Member } from '@/features/settings/services/members.service';
+import { useOrgId } from '@/hooks/use-org-query-key';
 
 const roleLabels: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   OWNER: { label: 'Proprietário', icon: ShieldCheck, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400' },
@@ -18,25 +19,41 @@ export default function SettingsMembersPage() {
   const [inviteRole, setInviteRole] = useState('AGENT');
   const [inviting, setInviting] = useState(false);
 
+  const orgId = useOrgId();
   const { data: members, isLoading } = useQuery({
-    queryKey: ['members'],
+    queryKey: ['members', orgId],
     queryFn: () => membersService.list(),
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['members'] });
 
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
     setInviting(true);
     try {
-      await membersService.invite({ email: inviteEmail.trim(), role: inviteRole });
+      const result = await membersService.invite({ email: inviteEmail.trim(), role: inviteRole });
       setInviteEmail('');
-      toast.success('Membro convidado!');
       refresh();
+      if (result.autoAccepted) {
+        toast.success('Membro adicionado com sucesso!');
+      } else {
+        const link = `${window.location.origin}/register?invite=${result.token}`;
+        setInviteLink(link);
+        toast.success('Convite criado! Compartilhe o link com o membro.');
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao convidar');
     } finally {
       setInviting(false);
+    }
+  };
+
+  const copyInviteLink = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink);
+      toast.success('Link copiado!');
     }
   };
 
@@ -101,6 +118,28 @@ export default function SettingsMembersPage() {
           <UserPlus className="h-4 w-4" /> Convidar
         </button>
       </div>
+
+      {inviteLink && (
+        <div className="mt-4 flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 dark:border-primary/30 dark:bg-primary/10">
+          <Link className="h-4 w-4 shrink-0 text-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Link de convite (expira em 7 dias)</p>
+            <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{inviteLink}</p>
+          </div>
+          <button
+            onClick={copyInviteLink}
+            className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setInviteLink(null)}
+            className="shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       <div className="mt-6 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <table className="w-full">

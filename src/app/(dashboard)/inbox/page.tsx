@@ -1,21 +1,38 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useState, useCallback, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageSquare } from 'lucide-react';
 import { ConversationList } from '@/features/inbox/components/conversation-list';
 import { ChatPanel } from '@/features/inbox/components/chat-panel';
-import type { Conversation } from '@/features/inbox/services/inbox.service';
+import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
 
 export default function InboxPage() {
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const queryClient = useQueryClient();
+
+  // Keep the active conversation object in sync with the backend (enrichment, last message, etc.)
+  const { data: freshActive } = useQuery({
+    queryKey: ['conversation', activeConversation?.id],
+    queryFn: () => inboxService.getConversation(activeConversation!.id),
+    enabled: !!activeConversation?.id,
+    refetchInterval: 5000,
+  });
+
+  useEffect(() => {
+    if (freshActive && freshActive.id === activeConversation?.id) {
+      setActiveConversation(freshActive);
+    }
+  }, [freshActive, activeConversation?.id]);
 
   const handleConversationUpdate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
     if (activeConversation) {
       queryClient.invalidateQueries({
         queryKey: ['messages', activeConversation.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['conversation', activeConversation.id],
       });
     }
   }, [queryClient, activeConversation]);

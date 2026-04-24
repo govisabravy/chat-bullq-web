@@ -1,10 +1,21 @@
 import { api } from '@/lib/api';
 
+export interface TagRef {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface TagLink {
+  tag: TagRef;
+}
+
 export interface Contact {
   id: string;
   name: string | null;
   phone: string | null;
   avatarUrl: string | null;
+  tags?: TagLink[];
 }
 
 export interface ChannelInfo {
@@ -35,13 +46,49 @@ export interface Conversation {
   assignedToId: string | null;
   status: string;
   protocol: string | null;
+  isGroup: boolean;
   lastMessageAt: string | null;
   createdAt: string;
   contact: Contact;
   channel: ChannelInfo;
   assignedTo: AgentInfo | null;
   messages: LastMessage[];
+  tags?: TagLink[];
   _count: { messages: number };
+}
+
+export interface MessageSender {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+export interface StoryReplyContext {
+  id?: string;
+  url?: string;
+  kind?: 'reply' | 'mention';
+}
+
+export interface ReplyContext {
+  externalMessageId?: string;
+  story?: StoryReplyContext;
+  ad?: { id?: string; title?: string };
+}
+
+export interface TranscriptionResult {
+  text: string;
+  language?: string;
+  durationMs?: number;
+  provider: string;
+  transcribedAt: string;
+}
+
+export interface MessageMetadata {
+  isEcho?: boolean;
+  replyTo?: ReplyContext | null;
+  transcription?: TranscriptionResult | null;
+  rawPayload?: any;
+  [key: string]: any;
 }
 
 export interface Message {
@@ -52,11 +99,14 @@ export interface Message {
   content: Record<string, any>;
   externalId: string | null;
   status: string;
+  senderName: string | null;
   senderId: string | null;
+  sender: MessageSender | null;
   sentAt: string | null;
   deliveredAt: string | null;
   readAt: string | null;
   createdAt: string;
+  metadata?: MessageMetadata | null;
 }
 
 export interface PaginatedResponse<T> {
@@ -114,5 +164,52 @@ export const inboxService = {
   async getStatusCounts(): Promise<Record<string, number>> {
     const { data } = await api.get('/conversations/counts');
     return data.data;
+  },
+
+  async bulkClose(ids: string[]): Promise<void> {
+    await Promise.allSettled(ids.map((id) => api.post(`/conversations/${id}/close`)));
+  },
+
+  async bulkAssignToMe(ids: string[]): Promise<void> {
+    await Promise.allSettled(ids.map((id) => api.post(`/conversations/${id}/assign-me`)));
+  },
+
+  async bulkReopen(ids: string[]): Promise<void> {
+    await Promise.allSettled(ids.map((id) => api.post(`/conversations/${id}/reopen`)));
+  },
+
+  async transcribeAudio(messageId: string, force = false): Promise<TranscriptionResult> {
+    // NOTE: body must be {} (not null) — express.json({ strict: true }) rejects
+    // literal "null" with "Unexpected token 'n', \"null\" is not valid JSON".
+    const { data } = await api.post(`/messages/${messageId}/transcribe`, {}, {
+      params: force ? { force: 'true' } : undefined,
+    });
+    return data.data;
+  },
+
+  async uploadAudio(blob: Blob, filename = 'audio.webm'): Promise<{
+    url: string;
+    mimeType: string;
+    size: number;
+  }> {
+    const form = new FormData();
+    form.append('file', blob, filename);
+    const { data } = await api.post('/messages/uploads/audio', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data;
+  },
+
+  async sendAudioMessage(conversationId: string, blob: Blob): Promise<Message> {
+    const upload = await this.uploadAudio(blob);
+    return this.sendMessage({
+      conversationId,
+      type: 'AUDIO',
+      content: {
+        mediaUrl: upload.url,
+        mimeType: upload.mimeType,
+        fileSize: upload.size,
+      },
+    });
   },
 };

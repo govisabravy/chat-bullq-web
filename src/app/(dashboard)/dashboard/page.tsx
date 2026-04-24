@@ -9,6 +9,7 @@ import {
   MessageSquare, Clock, Users, TrendingUp, TrendingDown, AlertTriangle, CheckCircle,
 } from 'lucide-react';
 import { dashboardService } from '@/features/dashboard/services/dashboard.service';
+import { useOrgId } from '@/hooks/use-org-query-key';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#6b7280'];
 const STATUS_COLORS: Record<string, string> = {
@@ -38,24 +39,25 @@ function KpiCard({ label, value, trend, icon: Icon, suffix }: {
 }
 
 export default function DashboardPage() {
+  const orgId = useOrgId();
   const { data: overview, isLoading: loadingOverview } = useQuery({
-    queryKey: ['dashboard-overview'],
+    queryKey: ['dashboard-overview', orgId],
     queryFn: () => dashboardService.getOverview(),
   });
   const { data: volumeByDay } = useQuery({
-    queryKey: ['dashboard-volume-day'],
+    queryKey: ['dashboard-volume-day', orgId],
     queryFn: () => dashboardService.getVolumeByDay(),
   });
   const { data: volumeByChannel } = useQuery({
-    queryKey: ['dashboard-volume-channel'],
+    queryKey: ['dashboard-volume-channel', orgId],
     queryFn: () => dashboardService.getVolumeByChannel(),
   });
   const { data: volumeByStatus } = useQuery({
-    queryKey: ['dashboard-volume-status'],
+    queryKey: ['dashboard-volume-status', orgId],
     queryFn: () => dashboardService.getVolumeByStatus(),
   });
   const { data: agents } = useQuery({
-    queryKey: ['dashboard-agents'],
+    queryKey: ['dashboard-agents', orgId],
     queryFn: () => dashboardService.getAgentPerformance(),
   });
 

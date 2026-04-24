@@ -6,12 +6,14 @@ export function getSocket(): Socket {
   if (socket) return socket;
 
   const url = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:3001';
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-  const orgId = typeof window !== 'undefined' ? localStorage.getItem('active_org_id') : null;
 
   socket = io(url, {
-    auth: { token, organizationId: orgId },
-    transports: ['websocket'],
+    auth: (cb) => {
+      const token = localStorage.getItem('access_token');
+      const organizationId = localStorage.getItem('active_org_id');
+      cb({ token, organizationId });
+    },
+    transports: ['websocket', 'polling'],
     autoConnect: true,
     reconnection: true,
     reconnectionDelay: 1000,

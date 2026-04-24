@@ -7,7 +7,24 @@ import {
   DialogPanel,
 } from "@headlessui/react";
 import { Menu, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import {
+  useState,
+  useEffect,
+  createContext,
+  useContext,
+  type ReactNode,
+} from "react";
+
+const SIDEBAR_STORAGE_KEY = "sidebar-collapsed";
+
+interface SidebarCollapseCtx {
+  collapsed: boolean;
+  toggle: () => void;
+}
+const SidebarCollapseContext = createContext<SidebarCollapseCtx | null>(null);
+export function useSidebarCollapse() {
+  return useContext(SidebarCollapseContext);
+}
 
 interface SidebarLayoutProps {
   sidebar: ReactNode;
@@ -21,9 +38,20 @@ export function SidebarLayout({
   children,
 }: SidebarLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    setCollapsed(localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
+  }, []);
+
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+  };
 
   return (
-    <div className="relative isolate flex min-h-svh w-full bg-white max-lg:flex-col lg:bg-zinc-100 dark:bg-zinc-900 dark:lg:bg-zinc-950">
+    <div className="relative isolate flex h-svh w-full bg-white max-lg:flex-col lg:bg-zinc-100 dark:bg-zinc-900 dark:lg:bg-zinc-950">
       {/* Mobile sidebar overlay */}
       <Dialog open={sidebarOpen} onClose={setSidebarOpen} className="lg:hidden">
         <DialogBackdrop
@@ -50,14 +78,28 @@ export function SidebarLayout({
       </Dialog>
 
       {/* Desktop sidebar */}
-      <div className="fixed inset-y-0 left-0 w-64 max-lg:hidden">
-        <div className="flex h-full flex-col border-r border-zinc-950/5 bg-white dark:border-white/5 dark:bg-zinc-900">
-          {sidebar}
+      <div
+        className={`fixed inset-y-0 left-0 max-lg:hidden transition-[width] duration-200 ease-in-out ${
+          collapsed ? "w-0" : "w-64"
+        }`}
+      >
+        <div
+          className={`flex h-full flex-col border-r border-zinc-950/5 bg-white dark:border-white/5 dark:bg-zinc-900 w-64 transition-transform duration-200 ease-in-out ${
+            collapsed ? "-translate-x-full" : "translate-x-0"
+          }`}
+        >
+          <SidebarCollapseContext.Provider value={{ collapsed, toggle: toggleCollapsed }}>
+            {sidebar}
+          </SidebarCollapseContext.Provider>
         </div>
       </div>
 
       {/* Content area */}
-      <main className="flex flex-1 flex-col lg:min-w-0 lg:pl-64">
+      <main
+        className={`flex flex-1 flex-col min-h-0 lg:min-w-0 transition-[padding] duration-200 ease-in-out ${
+          collapsed ? "lg:pl-0" : "lg:pl-64"
+        }`}
+      >
         {/* Mobile header */}
         <div className="flex items-center gap-4 border-b border-zinc-950/5 px-4 py-2.5 dark:border-white/5 lg:hidden">
           <button
@@ -72,8 +114,10 @@ export function SidebarLayout({
         </div>
 
         {/* Page content */}
-        <div className="flex flex-1 flex-col min-h-0 lg:bg-white lg:shadow-sm lg:ring-1 lg:ring-zinc-950/5 dark:lg:bg-zinc-900 dark:lg:ring-white/10">
-          {children}
+        <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden lg:bg-white lg:shadow-sm lg:ring-1 lg:ring-zinc-950/5 dark:lg:bg-zinc-900 dark:lg:ring-white/10">
+          <SidebarCollapseContext.Provider value={{ collapsed, toggle: toggleCollapsed }}>
+            {children}
+          </SidebarCollapseContext.Provider>
         </div>
       </main>
     </div>

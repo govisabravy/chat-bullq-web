@@ -30,9 +30,7 @@ export function LoginForm() {
       localStorage.setItem('refresh_token', result.refreshToken);
 
       setAuth(result.user, result.organizations);
-      if (result.organizations.length > 0) {
-        setActiveOrg(result.organizations[0].id);
-      }
+      // setAuth already picks the best org (stored or first available)
 
       toast.success(`Bem-vindo, ${result.user.name}!`);
       router.push('/inbox');

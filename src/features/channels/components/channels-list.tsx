@@ -6,13 +6,15 @@ import { Plus, Radio } from 'lucide-react';
 import { channelsService } from '../services/channels.service';
 import { ChannelCard } from './channel-card';
 import { CreateChannelDialog } from './create-channel-dialog';
+import { useOrgId } from '@/hooks/use-org-query-key';
 
 export function ChannelsList() {
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
+  const orgId = useOrgId();
 
   const { data: channels, isLoading } = useQuery({
-    queryKey: ['channels'],
+    queryKey: ['channels', orgId],
     queryFn: () => channelsService.list(),
   });
 

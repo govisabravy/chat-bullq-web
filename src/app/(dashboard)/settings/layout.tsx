@@ -5,8 +5,8 @@ import { usePathname } from 'next/navigation';
 import { Radio, Users, Tags, Bell, Building2 } from 'lucide-react';
 
 const tabs = [
-  { href: '/settings', label: 'Geral', icon: Building2 },
   { href: '/settings/channels', label: 'Canais', icon: Radio },
+  { href: '/settings/general', label: 'Geral', icon: Building2 },
   { href: '/settings/members', label: 'Membros', icon: Users },
   { href: '/settings/tags', label: 'Tags', icon: Tags },
   { href: '/settings/notifications', label: 'Notificações', icon: Bell },

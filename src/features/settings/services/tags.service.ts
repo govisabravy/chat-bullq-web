@@ -23,4 +23,16 @@ export const tagsService = {
   async remove(id: string): Promise<void> {
     await api.delete(`/tags/${id}`);
   },
+  async addToConversation(conversationId: string, tagId: string): Promise<void> {
+    await api.post(`/tags/conversation/${conversationId}/tag/${tagId}`);
+  },
+  async removeFromConversation(conversationId: string, tagId: string): Promise<void> {
+    await api.delete(`/tags/conversation/${conversationId}/tag/${tagId}`);
+  },
+  async addToContact(contactId: string, tagId: string): Promise<void> {
+    await api.post(`/tags/contact/${contactId}/tag/${tagId}`);
+  },
+  async removeFromContact(contactId: string, tagId: string): Promise<void> {
+    await api.delete(`/tags/contact/${contactId}/tag/${tagId}`);
+  },
 };

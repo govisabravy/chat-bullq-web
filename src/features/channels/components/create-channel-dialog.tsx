@@ -28,14 +28,12 @@ const channelTypes: { value: ChannelType; label: string; icon: React.ElementType
     label: 'Instagram',
     icon: Instagram,
     color: 'bg-pink-500',
-    description: 'Instagram Messenger API — DMs e stories',
+    description: 'Instagram API com login empresarial — DMs e stories',
   },
 ];
 
 const zappfySchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
-  baseUrl: z.string().url('URL inválida'),
-  instanceKey: z.string().min(1, 'Instance key é obrigatória'),
   token: z.string().min(1, 'Token é obrigatório'),
   webhookSecret: z.string().optional(),
 });
@@ -50,9 +48,10 @@ const waOfficialSchema = z.object({
 
 const instagramSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
-  pageId: z.string().min(1, 'Page ID é obrigatório'),
-  pageAccessToken: z.string().min(1, 'Page Access Token é obrigatório'),
-  igUserId: z.string().optional(),
+  accessToken: z.string().min(1, 'Access Token é obrigatório'),
+  appSecret: z.string().min(1, 'App Secret é obrigatório'),
+  igBusinessId: z.string().optional(),
+  igAppId: z.string().optional(),
   webhookSecret: z.string().optional(),
 });
 
@@ -78,7 +77,7 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
 
   const zappfyForm = useForm<ZappfyFormData>({
     resolver: zodResolver(zappfySchema),
-    defaultValues: { name: '', baseUrl: 'https://api.uazapi.com', instanceKey: '', token: '', webhookSecret: '' },
+    defaultValues: { name: '', token: '', webhookSecret: '' },
   });
 
   const waForm = useForm<WaOfficialFormData>({
@@ -88,11 +87,11 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
 
   const igForm = useForm<InstagramFormData>({
     resolver: zodResolver(instagramSchema),
-    defaultValues: { name: '', pageId: '', pageAccessToken: '', igUserId: '', webhookSecret: '' },
+    defaultValues: { name: '', accessToken: '', appSecret: '', igBusinessId: '', igAppId: '', webhookSecret: '' },
   });
 
   const apiBaseUrl = typeof window !== 'undefined'
-    ? `${window.location.origin.replace(':3000', ':3001')}/api/v1`
+    ? `${window.location.origin.replace(/:\d+$/, ':3001')}/api/v1`
     : 'http://localhost:3001/api/v1';
 
   const handleTypeSelect = (type: ChannelType) => {
@@ -121,13 +120,24 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
   };
 
   const onSubmitZappfy = (data: ZappfyFormData) =>
-    submitChannel('WHATSAPP_ZAPPFY', data.name, { baseUrl: data.baseUrl, instanceKey: data.instanceKey, token: data.token }, data.webhookSecret);
+    submitChannel('WHATSAPP_ZAPPFY', data.name, { token: data.token }, data.webhookSecret);
 
   const onSubmitWaOfficial = (data: WaOfficialFormData) =>
     submitChannel('WHATSAPP_OFFICIAL', data.name, { phoneNumberId: data.phoneNumberId, accessToken: data.accessToken, businessAccountId: data.businessAccountId }, data.webhookSecret);
 
   const onSubmitInstagram = (data: InstagramFormData) =>
-    submitChannel('INSTAGRAM', data.name, { pageId: data.pageId, pageAccessToken: data.pageAccessToken, igUserId: data.igUserId }, data.webhookSecret);
+    submitChannel(
+      'INSTAGRAM',
+      data.name,
+      {
+        accessToken: data.accessToken,
+        appSecret: data.appSecret,
+        igBusinessId: data.igBusinessId || undefined,
+        igAppId: data.igAppId || undefined,
+        apiVersion: 'v21.0',
+      },
+      data.webhookSecret,
+    );
 
   const handleClose = () => {
     setStep('type');
@@ -180,9 +190,7 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
         ) : selectedType === 'WHATSAPP_ZAPPFY' ? (
           <form onSubmit={zappfyForm.handleSubmit(onSubmitZappfy)} className="mt-6 space-y-4">
             <Field label="Nome do canal" placeholder="Ex: WhatsApp Principal" error={zappfyForm.formState.errors.name?.message} {...zappfyForm.register('name')} />
-            <Field label="URL da API" placeholder="https://api.uazapi.com" error={zappfyForm.formState.errors.baseUrl?.message} {...zappfyForm.register('baseUrl')} />
-            <Field label="Instance Key" placeholder="my-instance-key" error={zappfyForm.formState.errors.instanceKey?.message} {...zappfyForm.register('instanceKey')} />
-            <Field label="Token" type="password" placeholder="••••••••" error={zappfyForm.formState.errors.token?.message} {...zappfyForm.register('token')} />
+            <Field label="Token" placeholder="Token da instância Zappfy" error={zappfyForm.formState.errors.token?.message} {...zappfyForm.register('token')} />
             <Field label="Webhook Secret" placeholder="Opcional" optional {...zappfyForm.register('webhookSecret')} />
             <WebhookUrl url={`${apiBaseUrl}/webhooks/WHATSAPP_ZAPPFY`} copied={copied} onCopy={() => handleCopyWebhook('WHATSAPP_ZAPPFY')} />
             <FormFooter isLoading={isLoading} onBack={() => setStep('type')} />
@@ -200,9 +208,10 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
         ) : selectedType === 'INSTAGRAM' ? (
           <form onSubmit={igForm.handleSubmit(onSubmitInstagram)} className="mt-6 space-y-4">
             <Field label="Nome do canal" placeholder="Ex: Instagram Loja" error={igForm.formState.errors.name?.message} {...igForm.register('name')} />
-            <Field label="Page ID" placeholder="ID da Facebook Page vinculada" error={igForm.formState.errors.pageId?.message} {...igForm.register('pageId')} />
-            <Field label="Page Access Token" type="password" placeholder="Token de longa duração" error={igForm.formState.errors.pageAccessToken?.message} {...igForm.register('pageAccessToken')} />
-            <Field label="Instagram User ID" placeholder="Opcional — detectado automaticamente" optional {...igForm.register('igUserId')} />
+            <Field label="Access Token" type="password" placeholder="Instagram User Access Token (IGAAN...)" error={igForm.formState.errors.accessToken?.message} {...igForm.register('accessToken')} />
+            <Field label="App Secret" type="password" placeholder="Chave secreta do app (para validar webhooks)" error={igForm.formState.errors.appSecret?.message} {...igForm.register('appSecret')} />
+            <Field label="Instagram Business ID" placeholder="Opcional — detectado automaticamente" optional {...igForm.register('igBusinessId')} />
+            <Field label="Instagram App ID" placeholder="Opcional — ID do app do Instagram" optional {...igForm.register('igAppId')} />
             <Field label="Webhook Verify Token" placeholder="Token que você definiu no Meta" optional {...igForm.register('webhookSecret')} />
             <WebhookUrl url={`${apiBaseUrl}/webhooks/INSTAGRAM`} copied={copied} onCopy={() => handleCopyWebhook('INSTAGRAM')} />
             <FormFooter isLoading={isLoading} onBack={() => setStep('type')} />

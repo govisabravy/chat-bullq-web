@@ -9,6 +9,7 @@ interface RegisterPayload {
   name: string;
   email: string;
   password: string;
+  inviteToken?: string;
 }
 
 interface AuthUser {
@@ -25,16 +26,9 @@ interface OrgInfo {
   role: string;
 }
 
-interface LoginResponse {
+interface AuthResponse {
   user: AuthUser;
   organizations: OrgInfo[];
-  accessToken: string;
-  refreshToken: string;
-}
-
-interface RegisterResponse {
-  user: AuthUser;
-  organization: OrgInfo;
   accessToken: string;
   refreshToken: string;
 }
@@ -44,19 +38,30 @@ interface MeResponse {
   organizations: OrgInfo[];
 }
 
+interface InvitationInfo {
+  email: string;
+  role: string;
+  organization: { id: string; name: string; slug: string };
+}
+
 export const authService = {
-  async login(payload: LoginPayload): Promise<LoginResponse> {
-    const { data } = await api.post<{ data: LoginResponse }>('/auth/login', payload);
+  async login(payload: LoginPayload): Promise<AuthResponse> {
+    const { data } = await api.post<{ data: AuthResponse }>('/auth/login', payload);
     return data.data;
   },
 
-  async register(payload: RegisterPayload): Promise<RegisterResponse> {
-    const { data } = await api.post<{ data: RegisterResponse }>('/auth/register', payload);
+  async register(payload: RegisterPayload): Promise<AuthResponse> {
+    const { data } = await api.post<{ data: AuthResponse }>('/auth/register', payload);
     return data.data;
   },
 
   async getMe(): Promise<MeResponse> {
     const { data } = await api.get<{ data: MeResponse }>('/auth/me');
+    return data.data;
+  },
+
+  async validateInvitation(token: string): Promise<InvitationInfo> {
+    const { data } = await api.get<{ data: InvitationInfo }>(`/organizations/invitations/validate?token=${token}`);
     return data.data;
   },
 };

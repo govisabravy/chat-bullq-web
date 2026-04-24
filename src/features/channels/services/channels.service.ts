@@ -35,6 +35,26 @@ export interface TestConnectionResult {
   data?: any;
 }
 
+export type SyncStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+export type SyncMode = 'INITIAL' | 'MANUAL' | 'DELTA';
+
+export interface ChannelSyncJob {
+  id: string;
+  channelId: string;
+  status: SyncStatus;
+  mode: SyncMode;
+  lookbackDays: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  conversationsTotal: number;
+  conversationsImported: number;
+  messagesImported: number;
+  contactsImported: number;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const channelsService = {
   async list(): Promise<Channel[]> {
     const { data } = await api.get<{ data: Channel[] }>('/channels');
@@ -56,12 +76,29 @@ export const channelsService = {
     return data.data;
   },
 
-  async remove(id: string): Promise<void> {
-    await api.delete(`/channels/${id}`);
+  async remove(id: string, confirmName: string): Promise<void> {
+    await api.delete(`/channels/${id}`, {
+      params: { confirmName },
+    });
   },
 
   async testConnection(id: string): Promise<TestConnectionResult> {
     const { data } = await api.post<{ data: TestConnectionResult }>(`/channels/${id}/test`);
     return data.data;
+  },
+
+  async startSync(id: string): Promise<{ success: boolean; jobId?: string; status?: SyncStatus }> {
+    const { data } = await api.post<{ data: { success: boolean; jobId?: string; status?: SyncStatus } }>(`/channels/${id}/sync`);
+    return data.data;
+  },
+
+  async getSyncStatus(id: string): Promise<ChannelSyncJob | null> {
+    const { data } = await api.get<{ data: { job: ChannelSyncJob | null } }>(`/channels/${id}/sync/status`);
+    return data.data.job;
+  },
+
+  async cancelSync(id: string): Promise<ChannelSyncJob | null> {
+    const { data } = await api.post<{ data: { job: ChannelSyncJob | null } }>(`/channels/${id}/sync/cancel`);
+    return data.data.job;
   },
 };

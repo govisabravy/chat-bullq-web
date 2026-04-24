@@ -29,8 +29,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   activeOrgId: typeof window !== 'undefined' ? localStorage.getItem('active_org_id') : null,
 
   setAuth: (user, organizations) => {
-    const activeOrgId =
-      localStorage.getItem('active_org_id') || organizations[0]?.id || null;
+    const stored = localStorage.getItem('active_org_id');
+    // Use stored org if it's still in the user's org list, otherwise pick first
+    const validStored = stored && organizations.some((o) => o.id === stored) ? stored : null;
+    const activeOrgId = validStored || organizations[0]?.id || null;
     if (activeOrgId) localStorage.setItem('active_org_id', activeOrgId);
     set({ user, organizations, activeOrgId });
   },

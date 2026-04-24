@@ -14,7 +14,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, setAuth } = useAuthStore();
+  const { user, setAuth, activeOrgId, setActiveOrg } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -33,6 +33,11 @@ export default function DashboardLayout({
       .getMe()
       .then((data) => {
         setAuth(data.user, data.organizations);
+        // Ensure activeOrgId is set (setAuth handles this, but double-check)
+        const currentOrgId = localStorage.getItem('active_org_id');
+        if (!currentOrgId && data.organizations.length > 0) {
+          setActiveOrg(data.organizations[0].id);
+        }
         setIsLoading(false);
       })
       .catch(() => {
@@ -40,7 +45,7 @@ export default function DashboardLayout({
         localStorage.removeItem('refresh_token');
         router.replace('/login');
       });
-  }, [router, user, setAuth]);
+  }, [router, user, setAuth, setActiveOrg]);
 
   if (isLoading) {
     return (
@@ -56,7 +61,7 @@ export default function DashboardLayout({
       navbar={
         <Navbar>
           <NavbarSpacer />
-          <NavbarSection>{/* Items da navbar mobile */}</NavbarSection>
+          <NavbarSection><></></NavbarSection>
         </Navbar>
       }
     >

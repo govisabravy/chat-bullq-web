@@ -1,25 +1,52 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Loader2, MessageSquare } from 'lucide-react';
+import { Loader2, MessageSquare, Building2 } from 'lucide-react';
 import { registerSchema, type RegisterFormData } from '../schemas/register.schema';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '@/stores/auth-store';
 
+interface InviteInfo {
+  email: string;
+  role: string;
+  organization: { id: string; name: string; slug: string };
+}
+
 export function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setAuth, setActiveOrg } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
+  const [inviteInfo, setInviteInfo] = useState<InviteInfo | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+
+  const inviteToken = searchParams.get('invite');
 
   const form = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
   });
+
+  // Validate invite token on mount
+  useEffect(() => {
+    if (!inviteToken) return;
+    setInviteLoading(true);
+    authService
+      .validateInvitation(inviteToken)
+      .then((info) => {
+        setInviteInfo(info);
+        form.setValue('email', info.email);
+      })
+      .catch(() => {
+        toast.error('Convite inválido ou expirado');
+      })
+      .finally(() => setInviteLoading(false));
+  }, [inviteToken, form]);
 
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true);
@@ -28,15 +55,20 @@ export function RegisterForm() {
         name: data.name,
         email: data.email,
         password: data.password,
+        inviteToken: inviteToken || undefined,
       });
 
       localStorage.setItem('access_token', result.accessToken);
       localStorage.setItem('refresh_token', result.refreshToken);
 
-      setAuth(result.user, [result.organization]);
-      setActiveOrg(result.organization.id);
+      setAuth(result.user, result.organizations);
+      setActiveOrg(result.organizations[0].id);
 
-      toast.success('Conta criada com sucesso!');
+      toast.success(
+        inviteInfo
+          ? `Bem-vindo! Você entrou em ${inviteInfo.organization.name}`
+          : 'Conta criada com sucesso!',
+      );
       router.push('/inbox');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao criar conta');
@@ -45,6 +77,14 @@ export function RegisterForm() {
     }
   };
 
+  if (inviteLoading) {
+    return (
+      <div className="mx-auto flex w-full max-w-sm items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-sm space-y-8">
       <div className="space-y-2 text-center">
@@ -52,9 +92,21 @@ export function RegisterForm() {
           <MessageSquare className="h-6 w-6 text-primary-foreground" />
         </div>
         <h1 className="text-2xl font-bold tracking-tight">Criar Conta</h1>
-        <p className="text-sm text-muted-foreground">
-          Crie sua conta para começar a atender
-        </p>
+        {inviteInfo ? (
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">
+              Você foi convidado para entrar em:
+            </p>
+            <div className="inline-flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary">
+              <Building2 className="h-4 w-4" />
+              {inviteInfo.organization.name}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Crie sua conta para começar a atender
+          </p>
+        )}
       </div>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -85,7 +137,10 @@ export function RegisterForm() {
             id="email"
             type="email"
             autoComplete="email"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            readOnly={!!inviteInfo}
+            className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              inviteInfo ? 'cursor-not-allowed bg-muted' : ''
+            }`}
             placeholder="seu@email.com"
             {...form.register('email')}
           />
@@ -140,7 +195,7 @@ export function RegisterForm() {
           className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
         >
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Criar conta
+          {inviteInfo ? 'Criar conta e entrar' : 'Criar conta'}
         </button>
       </form>
 

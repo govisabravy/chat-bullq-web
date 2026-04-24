@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Bot, MoreVertical, Trash2, Power, PowerOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { chatbotService, type ChatbotFlow } from '@/features/chatbot/services/chatbot.service';
+import { useOrgId } from '@/hooks/use-org-query-key';
 
 export default function ChatbotPage() {
   const router = useRouter();
@@ -14,8 +15,9 @@ export default function ChatbotPage() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
 
+  const orgId = useOrgId();
   const { data: flows, isLoading } = useQuery({
-    queryKey: ['chatbot-flows'],
+    queryKey: ['chatbot-flows', orgId],
     queryFn: () => chatbotService.list(),
   });
 
