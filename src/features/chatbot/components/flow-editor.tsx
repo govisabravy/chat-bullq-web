@@ -23,6 +23,7 @@ import { NodeToolbar } from './node-toolbar';
 import { NodePropertiesPanel } from './node-properties-panel';
 import { ChatSimulator } from './chat-simulator';
 import { chatbotService, type ChatbotFlow, type ChatbotNode } from '../services/chatbot.service';
+import { Button } from '@/components/ui/button';
 
 interface FlowEditorProps {
   flow: ChatbotFlow;
@@ -139,30 +140,35 @@ export function FlowEditor({ flow }: FlowEditorProps) {
 
   return (
     <div className="flex h-[calc(100vh-theme(spacing.4))] flex-col">
-      <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex items-center justify-between border-b border-border bg-background px-4 py-2.5">
         <div className="flex items-center gap-3">
-          <Link href="/chatbot" className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
-            <ArrowLeft className="h-5 w-5" />
+          <Link href="/chatbot">
+            <Button variant="ghost" size="icon" aria-label="Voltar">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
           </Link>
           <div>
-            <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{flow.name}</h1>
-            <p className="text-[10px] text-zinc-400">{flow.nodes.length} nós · {flow.isActive ? 'Ativo' : 'Inativo'}</p>
+            <h1 className="text-sm font-semibold text-foreground">{flow.name}</h1>
+            <p className="text-[10px] text-muted-foreground">{flow.nodes.length} nós · {flow.isActive ? 'Ativo' : 'Inativo'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setShowSimulator(!showSimulator)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300"
           >
             <Play className="h-3.5 w-3.5" /> Simular
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handleSave}
             disabled={isSaving}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            loading={isSaving}
           >
             <Save className="h-3.5 w-3.5" /> Salvar
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -188,7 +194,7 @@ export function FlowEditor({ flow }: FlowEditorProps) {
               nodeStrokeWidth={3}
               pannable
               zoomable
-              className="!rounded-xl !border !border-zinc-200 dark:!border-zinc-700"
+              className="!rounded-xl !border !border-border"
             />
           </ReactFlow>
           <NodeToolbar onAddNode={handleAddNode} />

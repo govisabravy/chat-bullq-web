@@ -13,12 +13,26 @@ import {
   PlayCircle,
 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip } from '@/components/ui/tooltip';
 import { inboxService, type Conversation } from '../services/inbox.service';
 
 const channelIcons: Record<string, React.ElementType> = {
   WHATSAPP_ZAPPFY: MessageSquare,
   WHATSAPP_OFFICIAL: Smartphone,
   INSTAGRAM: Instagram,
+};
+
+type StatusVariant = 'success' | 'warning' | 'default' | 'info' | 'outline';
+
+const statusVariantMap: Record<string, StatusVariant> = {
+  OPEN: 'success',
+  PENDING: 'warning',
+  CLOSED: 'default',
+  BOT: 'info',
+  WAITING: 'outline',
 };
 
 interface ConversationHeaderProps {
@@ -29,6 +43,7 @@ interface ConversationHeaderProps {
 export function ConversationHeader({ conversation, onUpdate }: ConversationHeaderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const Icon = channelIcons[conversation.channel.type] || MessageSquare;
+  const statusVariant = statusVariantMap[conversation.status] ?? 'default';
 
   const handleAction = async (action: () => Promise<any>, successMsg: string) => {
     setIsLoading(true);
@@ -65,105 +80,110 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
     onError: (err: any) => toast.error(err?.message ?? 'Erro ao retomar IA'),
   });
 
+  const displayName =
+    conversation.contact.name || conversation.contact.phone || 'Desconhecido';
+
   return (
-    <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center gap-3">
-        {conversation.contact.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={conversation.contact.avatarUrl}
-            alt={conversation.contact.name || ''}
-            className="h-10 w-10 rounded-full object-cover bg-zinc-100 dark:bg-zinc-800"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-          />
-        ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-sm font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-            {conversation.contact.name?.slice(0, 2).toUpperCase() || '??'}
-          </div>
-        )}
-        <div>
+    <div className="flex items-center justify-between gap-3 px-4 h-14 border-b border-border bg-card">
+      <div className="flex items-center gap-3 min-w-0">
+        <Avatar
+          size="md"
+          src={conversation.contact.avatarUrl ?? undefined}
+          alt={conversation.contact.name || ''}
+          fallback={conversation.contact.name?.slice(0, 2).toUpperCase() || '??'}
+        />
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              {conversation.contact.name || conversation.contact.phone || 'Desconhecido'}
+            <span className="text-sm font-semibold text-foreground truncate">
+              {displayName}
             </span>
-            <Icon className="h-3.5 w-3.5 text-zinc-400" />
+            <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <Badge variant={statusVariant}>{conversation.status}</Badge>
           </div>
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {conversation.contact.phone && <span>{conversation.contact.phone}</span>}
             {conversation.protocol && (
-              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-mono dark:bg-zinc-800">
+              <Badge variant="outline" className="font-mono text-[10px]">
                 #{conversation.protocol}
-              </span>
+              </Badge>
             )}
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 shrink-0">
         {conversation.activeAiAgentId && !conversation.aiPaused && (
-          <button
-            onClick={() => pauseMutation.mutate()}
-            disabled={pauseMutation.isPending}
-            className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/30"
-          >
-            <PauseCircle className="h-3.5 w-3.5" />
-            Pausar IA
-          </button>
+          <Tooltip content="Pausar IA" side="bottom">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => pauseMutation.mutate()}
+              loading={pauseMutation.isPending}
+            >
+              <PauseCircle />
+            </Button>
+          </Tooltip>
         )}
         {conversation.activeAiAgentId && conversation.aiPaused && (
-          <button
-            onClick={() => resumeMutation.mutate()}
-            disabled={resumeMutation.isPending}
-            className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
-          >
-            <PlayCircle className="h-3.5 w-3.5" />
-            Retomar IA
-          </button>
+          <Tooltip content="Retomar IA" side="bottom">
+            <Button
+              variant="primary"
+              size="icon"
+              onClick={() => resumeMutation.mutate()}
+              loading={resumeMutation.isPending}
+            >
+              <PlayCircle />
+            </Button>
+          </Tooltip>
         )}
         {conversation.status !== 'CLOSED' && !conversation.assignedToId && (
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() =>
               handleAction(
                 () => inboxService.assignToMe(conversation.id),
                 'Conversa atribuída a você',
               )
             }
-            disabled={isLoading}
-            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            loading={isLoading}
           >
-            <UserPlus className="h-3.5 w-3.5" />
+            <UserPlus />
             Atribuir a mim
-          </button>
+          </Button>
         )}
         {conversation.status !== 'CLOSED' && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hover:text-destructive hover:bg-destructive/10"
             onClick={() =>
               handleAction(
                 () => inboxService.closeConversation(conversation.id),
                 'Conversa encerrada',
               )
             }
-            disabled={isLoading}
-            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-red-50 hover:text-red-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+            loading={isLoading}
           >
-            <XCircle className="h-3.5 w-3.5" />
+            <XCircle />
             Encerrar
-          </button>
+          </Button>
         )}
         {conversation.status === 'CLOSED' && (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() =>
               handleAction(
                 () => inboxService.reopenConversation(conversation.id),
                 'Conversa reaberta',
               )
             }
-            disabled={isLoading}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+            loading={isLoading}
           >
-            <RotateCcw className="h-3.5 w-3.5" />
+            <RotateCcw />
             Reabrir
-          </button>
+          </Button>
         )}
       </div>
     </div>

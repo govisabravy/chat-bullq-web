@@ -3,18 +3,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Check,
-  CheckCheck,
-  Clock,
   AlertCircle,
   MapPin,
   User,
   Phone,
   FileText,
-  Image as ImageIcon,
-  Music2,
-  Video,
-  Sticker,
   QrCode,
   CreditCard,
   Loader2,
@@ -24,21 +17,16 @@ import {
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
 import { ChatInput } from './chat-input';
 import { ConversationHeader } from './conversation-header';
+import { ChatBubble, type BubbleStatus } from './chat-bubble';
+import { ChatEmptyState } from './chat-empty-state';
 import { useSocket } from '../hooks/use-socket';
 import { formatWhatsApp } from '@/lib/whatsapp-format';
+import { cn } from '@/lib/utils';
 
 interface ChatPanelProps {
-  conversation: Conversation;
+  conversation?: Conversation | null;
   onConversationUpdate: () => void;
 }
-
-const statusIcons: Record<string, React.ElementType> = {
-  QUEUED: Clock,
-  SENT: Check,
-  DELIVERED: CheckCheck,
-  READ: CheckCheck,
-  FAILED: AlertCircle,
-};
 
 const MAX_TEXT_LEN = 8000;
 
@@ -206,7 +194,7 @@ function MessageBody({ msg }: { msg: Message }) {
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-md bg-black/5 px-3 py-2 text-sm underline dark:bg-white/10"
+              className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm underline"
             >
               <FileText className="h-4 w-4 shrink-0" />
               <span className="truncate">{c.fileName || 'Documento'}</span>
@@ -271,7 +259,7 @@ function MessageBody({ msg }: { msg: Message }) {
       return (
         <div className="space-y-2">
           {contacts.map((ct: any, idx: number) => (
-            <div key={idx} className="rounded-md bg-black/5 p-2 dark:bg-white/10">
+            <div key={idx} className="rounded-md bg-muted p-2">
               <p className="flex items-center gap-1.5 text-sm font-medium">
                 <User className="h-4 w-4 shrink-0" />
                 {ct.displayName || 'Contato'}
@@ -312,7 +300,7 @@ function MessageBody({ msg }: { msg: Message }) {
           {p.merchantName && <p className="text-xs">Recebedor: <span className="font-medium">{p.merchantName}</span></p>}
           {p.pixKey && (
             <p className="mt-1 text-xs">
-              Chave {p.pixKeyType?.toLowerCase() || 'pix'}: <code className="rounded bg-black/10 px-1 dark:bg-white/10">{p.pixKey}</code>
+              Chave {p.pixKeyType?.toLowerCase() || 'pix'}: <code className="rounded bg-muted px-1">{p.pixKey}</code>
             </p>
           )}
           {p.referenceId && <p className="mt-0.5 text-[10px] opacity-60">Ref: {p.referenceId}</p>}
@@ -339,59 +327,120 @@ function toText(value: unknown): string {
   return '';
 }
 
+function normalizeStatus(status: string): BubbleStatus | undefined {
+  switch (status) {
+    case 'SENT':
+      return 'sent';
+    case 'DELIVERED':
+      return 'delivered';
+    case 'READ':
+      return 'read';
+    case 'FAILED':
+      return 'failed';
+    default:
+      return undefined;
+  }
+}
+
 export function ChatPanel({ conversation, onConversationUpdate }: ChatPanelProps) {
   const queryClient = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { on, emit } = useSocket();
 
+  const conversationId = conversation?.id;
+
   const { data, isLoading } = useQuery({
-    queryKey: ['messages', conversation.id],
-    queryFn: () => inboxService.getMessages(conversation.id),
+    queryKey: ['messages', conversationId],
+    queryFn: () => inboxService.getMessages(conversationId as string),
+    enabled: !!conversationId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const messages = data?.messages || [];
 
   useEffect(() => {
-    emit('join:conversation', { conversationId: conversation.id });
+    if (!conversationId) return;
+    emit('join:conversation', { conversationId });
     return () => {
-      emit('leave:conversation', { conversationId: conversation.id });
+      emit('leave:conversation', { conversationId });
     };
-  }, [conversation.id, emit]);
+  }, [conversationId, emit]);
 
   useEffect(() => {
+    if (!conversationId) return;
     const unsub = on('message:new', (payload: any) => {
-      if (payload.conversationId === conversation.id || payload.message?.conversationId === conversation.id) {
-        queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
+      if (payload.conversationId === conversationId || payload.message?.conversationId === conversationId) {
+        queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
       }
     });
     return unsub;
-  }, [conversation.id, on, queryClient]);
+  }, [conversationId, on, queryClient]);
 
   useEffect(() => {
+    if (!conversationId) return;
     const unsub = on('message:updated', (payload: any) => {
-      if (payload.conversationId === conversation.id) {
-        queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
+      if (payload.conversationId === conversationId) {
+        queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
       }
     });
     return unsub;
-  }, [conversation.id, on, queryClient]);
+  }, [conversationId, on, queryClient]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!conversationId) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const scrollToEnd = () => {
+      container.scrollTop = container.scrollHeight;
+    };
+
+    scrollToEnd();
+    const timers = [50, 150, 400, 900].map((ms) => setTimeout(scrollToEnd, ms));
+
+    const observer = new MutationObserver(scrollToEnd);
+    observer.observe(container, { childList: true, subtree: true });
+    const disconnectTimer = setTimeout(() => observer.disconnect(), 1500);
+
+    return () => {
+      timers.forEach(clearTimeout);
+      clearTimeout(disconnectTimer);
+      observer.disconnect();
+    };
+  }, [conversationId, messages.length === 0 ? 0 : 1]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || messages.length === 0) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom < 300) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages.length]);
 
   useEffect(() => {
+    if (!conversationId) return;
     inboxService
-      .markRead(conversation.id)
+      .markRead(conversationId)
       .then((res) => {
         if (res.readCount > 0) {
           queryClient.invalidateQueries({ queryKey: ['conversations'] });
         }
       })
       .catch(() => {});
-  }, [conversation.id, queryClient]);
+  }, [conversationId, queryClient]);
+
+  if (!conversation) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-background">
+        <ChatEmptyState />
+      </div>
+    );
+  }
 
   const handleSend = async (text: string) => {
     const msg = await inboxService.sendMessage({
@@ -412,40 +461,59 @@ export function ChatPanel({ conversation, onConversationUpdate }: ChatPanelProps
     new Date(date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
       <ConversationHeader
         conversation={conversation}
         onUpdate={onConversationUpdate}
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-50 p-4 dark:bg-zinc-900/50">
+      <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-background p-4">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-zinc-400">
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Nenhuma mensagem ainda
           </div>
         ) : (
-          <div className="mx-auto max-w-2xl space-y-2">
+          <div className="mx-auto flex max-w-2xl flex-col gap-2">
             {messages.map((msg) => {
               const isOutbound = msg.direction === 'OUTBOUND';
-              const StatusIcon = statusIcons[msg.status] || Clock;
+              const direction = isOutbound ? 'outbound' : 'inbound';
+              const formatted = formatTime(msg.createdAt);
+              const normalizedStatus = normalizeStatus(msg.status);
+
+              if (msg.type === 'TEXT' && msg.status !== 'FAILED') {
+                return (
+                  <ChatBubble
+                    key={msg.id}
+                    direction={direction}
+                    timestamp={formatted}
+                    status={normalizedStatus}
+                  >
+                    {formatWhatsApp(toText(msg.content?.text))}
+                  </ChatBubble>
+                );
+              }
+
+              const isFailed = msg.status === 'FAILED';
+
               return (
                 <div
                   key={msg.id}
-                  className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
+                  className={cn('flex w-full', isOutbound ? 'justify-end' : 'justify-start')}
                 >
                   <div
-                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
-                      msg.status === 'FAILED'
-                        ? 'rounded-br-md border border-red-300 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200'
+                    className={cn(
+                      'max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-xs',
+                      isFailed
+                        ? 'rounded-br-sm border border-destructive/40 bg-destructive/10 text-destructive-foreground'
                         : isOutbound
-                        ? 'rounded-br-md bg-primary text-primary-foreground'
-                        : 'rounded-bl-md bg-white shadow-sm dark:bg-zinc-800 dark:text-zinc-100'
-                    }`}
-                    title={msg.status === 'FAILED' ? msg.failedReason || 'Falha ao enviar' : undefined}
+                          ? 'rounded-br-sm bg-primary/90 text-primary-foreground'
+                          : 'rounded-bl-sm border border-border bg-card text-card-foreground',
+                    )}
+                    title={isFailed ? msg.failedReason || 'Falha ao enviar' : undefined}
                   >
                     <MessageBody msg={msg} />
                     {msg.type !== 'TEXT' && msg.content?.caption && (
@@ -453,25 +521,21 @@ export function ChatPanel({ conversation, onConversationUpdate }: ChatPanelProps
                         {formatWhatsApp(toText(msg.content.caption))}
                       </p>
                     )}
-                    {msg.status === 'FAILED' && (
-                      <p className="mt-1 flex items-center gap-1 text-[11px] text-red-600 dark:text-red-300">
+                    {isFailed && (
+                      <p className="mt-1 flex items-center gap-1 text-[11px] text-destructive">
                         <AlertCircle className="h-3 w-3" />
                         {msg.failedReason || 'Falha ao enviar'}
                       </p>
                     )}
                     <div
-                      className={`mt-1 flex items-center gap-1 text-[10px] ${
-                        isOutbound ? 'justify-end opacity-70' : 'text-zinc-400'
-                      }`}
+                      className={cn(
+                        'mt-1 flex items-center justify-end gap-1 text-[10px]',
+                        isOutbound ? 'opacity-70' : 'text-muted-foreground',
+                      )}
                     >
-                      <span>{formatTime(msg.createdAt)}</span>
+                      <span>{formatted}</span>
                       {isOutbound && msg.metadata?.viaMobile && (
                         <Smartphone className="h-3 w-3" />
-                      )}
-                      {isOutbound && (
-                        <StatusIcon
-                          className={`h-3 w-3 ${msg.status === 'READ' ? 'text-blue-300' : ''}`}
-                        />
                       )}
                     </div>
                   </div>

@@ -1,52 +1,62 @@
-import { cn } from '@/lib/utils';
+"use client";
+import * as React from "react";
+import { cn } from "@/lib/utils";
 
-interface AvatarProps {
+export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
   src?: string | null;
-  initials?: string;
   alt?: string;
+  fallback?: string;
+  initials?: string;
+  size?: "sm" | "md" | "lg";
   square?: boolean;
-  className?: string;
+}
+
+const sizeMap = {
+  sm: "h-7 w-7 text-[10px]",
+  md: "h-9 w-9 text-xs",
+  lg: "h-11 w-11 text-sm",
+} as const;
+
+function deriveInitials(value: string): string {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export function Avatar({
   src,
+  alt,
+  fallback,
   initials,
-  alt = '',
-  square = false,
+  size = "md",
+  square,
   className,
+  ...props
 }: AvatarProps) {
+  const [errored, setErrored] = React.useState(false);
+  const label = initials ?? fallback ?? alt ?? "?";
+  const showImg = src && !errored;
+
   return (
     <span
       className={cn(
-        'inline-grid size-8 shrink-0 place-items-center align-middle overflow-hidden',
-        square ? 'rounded-lg' : 'rounded-full',
-        'bg-zinc-100 dark:bg-zinc-800',
-        'outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10',
-        className,
+        "relative inline-flex shrink-0 items-center justify-center overflow-hidden bg-muted font-medium text-muted-foreground",
+        square ? "rounded-md" : "rounded-full",
+        sizeMap[size],
+        className
       )}
+      {...props}
     >
-      {src ? (
+      {showImg ? (
         <img
           src={src}
-          alt={alt}
-          className={cn(
-            'size-full object-cover',
-            square ? 'rounded-lg' : 'rounded-full',
-          )}
+          alt={alt ?? ""}
+          className="h-full w-full object-cover"
+          onError={() => setErrored(true)}
         />
-      ) : initials ? (
-        <span className="select-none text-[0.625em] font-medium uppercase text-zinc-600 dark:text-zinc-400">
-          {initials}
-        </span>
       ) : (
-        <svg
-          className="size-5 text-zinc-400"
-          fill="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden
-        >
-          <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
+        <span>{initials ?? deriveInitials(label)}</span>
       )}
     </span>
   );

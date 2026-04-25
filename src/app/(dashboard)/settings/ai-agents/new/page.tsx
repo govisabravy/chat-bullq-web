@@ -3,10 +3,38 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ChevronLeft, Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { aiAgentsService, type AiProvider } from '@/features/ai-agents/services/ai-agents.service';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectOption } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 
-const PROVIDERS: AiProvider[] = ['GEMINI', 'OPENAI', 'ANTHROPIC', 'OPENROUTER'];
+function Field({
+  label,
+  htmlFor,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={htmlFor}>
+        {label} {required ? <span className="text-destructive">*</span> : null}
+      </Label>
+      {children}
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
 
 export default function NewAgentPage() {
   const router = useRouter();
@@ -77,195 +105,156 @@ export default function NewAgentPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
-      <Link
-        href="/settings/ai-agents"
-        className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-      >
-        <ChevronLeft className="h-3.5 w-3.5" /> Voltar
-      </Link>
+    <div className="mx-auto max-w-2xl space-y-6">
+      <div>
+        <Link href="/settings/ai-agents" className="text-sm text-muted-foreground hover:text-foreground transition-smooth">
+          ← Voltar
+        </Link>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Novo agente</h1>
+        <p className="text-sm text-muted-foreground">Configure identidade, modelo e credenciais.</p>
+      </div>
 
-      <h2 className="mt-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">Novo agente</h2>
-      <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-        Configure nome, prompt e credenciais. Validação é feita ao salvar.
-      </p>
-
-      <form onSubmit={submit} className="mt-6 space-y-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <Field label="Nome" required>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ex: Vendedor ThinkBullQ"
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Descrição">
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Breve descrição do agente (opcional)"
-            className={inputCls}
-          />
-        </Field>
-
-        <Field
-          label="System prompt"
-          required
-          hint="Variáveis disponíveis: {contactName} {contactPhone} {protocol} {currentDate} {currentTime}"
-        >
-          <textarea
-            value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-            rows={6}
-            className={`${inputCls} h-auto font-mono text-xs leading-relaxed`}
-          />
-        </Field>
-
-        <Field label="Provider" required>
-          <select
-            value={generationProvider}
-            onChange={(e) => setGenerationProvider(e.target.value as AiProvider)}
-            className={inputCls}
-          >
-            {PROVIDERS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field
-          label="API Key"
-          required
-          hint="Cole a key → sai do campo ou clica 🔄 pra carregar modelos disponíveis. Armazenada criptografada."
-        >
-          <div className="flex gap-2">
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              onBlur={() => apiKey.trim() && fetchModels(generationProvider, apiKey)}
-              placeholder="AIza... / sk-... / etc"
-              className={inputCls}
-            />
-            <button
-              type="button"
-              onClick={() => apiKey.trim() && fetchModels(generationProvider, apiKey)}
-              disabled={!apiKey.trim() || loadingModels}
-              className="inline-flex h-10 items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              title="Buscar modelos"
+      <form onSubmit={submit} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Identidade</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-4">
+            <Field label="Nome" required>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ex: Vendedor ThinkBullQ"
+              />
+            </Field>
+            <Field label="Descrição">
+              <Input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Breve descrição do agente (opcional)"
+              />
+            </Field>
+            <Field
+              label="System prompt"
+              required
+              hint="Variáveis disponíveis: {contactName} {contactPhone} {protocol} {currentDate} {currentTime}"
             >
-              {loadingModels ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            </button>
-          </div>
-        </Field>
+              <Textarea
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                rows={6}
+                className="font-mono text-xs leading-relaxed"
+              />
+            </Field>
+          </CardContent>
+        </Card>
 
-        <Field label="Modelo fallback" hint="Opcional. Usado automaticamente se o modelo principal retornar 429/503/rate-limit. Precisa ser do mesmo provider.">
-          <select
-            value={fallbackModel}
-            onChange={(e) => setFallbackModel(e.target.value)}
-            disabled={models.length === 0}
-            className={inputCls}
-          >
-            <option value="">— sem fallback —</option>
-            {models
-              .filter((m) => m !== generationModel)
-              .map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-          </select>
-        </Field>
+        <Card>
+          <CardHeader>
+            <CardTitle>LLM</CardTitle>
+            <CardDescription>Provider + credenciais. Validação acontece ao salvar.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-4">
+            <Field label="Provider" required>
+              <Select value={generationProvider} onChange={(v) => setGenerationProvider(v as AiProvider)}>
+                <SelectOption value="GEMINI">GEMINI</SelectOption>
+                <SelectOption value="OPENAI">OPENAI</SelectOption>
+                <SelectOption value="ANTHROPIC">ANTHROPIC</SelectOption>
+                <SelectOption value="OPENROUTER">OPENROUTER</SelectOption>
+              </Select>
+            </Field>
+            <Field label="API key" required>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  onBlur={() => apiKey.trim() && fetchModels(generationProvider, apiKey)}
+                  placeholder="AIza... / sk-... / etc"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  type="button"
+                  onClick={() => apiKey.trim() && fetchModels(generationProvider, apiKey)}
+                  disabled={!apiKey.trim() || loadingModels}
+                  title="Buscar modelos"
+                >
+                  {loadingModels ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                </Button>
+              </div>
+            </Field>
+            <Field
+              label="Modelo"
+              required
+              hint={modelsError ?? (models.length === 0 ? 'Cole a API key e busque os modelos' : `${models.length} modelos disponíveis`)}
+            >
+              <Select
+                value={generationModel}
+                onChange={setGenerationModel}
+                disabled={models.length === 0}
+                placeholder="— carregue os modelos —"
+              >
+                {models.map((m) => (
+                  <SelectOption key={m} value={m}>
+                    {m}
+                  </SelectOption>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Modelo fallback" hint="Usado se o primário retornar rate limit.">
+              <Select
+                value={fallbackModel}
+                onChange={setFallbackModel}
+                disabled={models.length === 0}
+              >
+                <SelectOption value="">— sem fallback —</SelectOption>
+                {models
+                  .filter((m) => m !== generationModel)
+                  .map((m) => (
+                    <SelectOption key={m} value={m}>
+                      {m}
+                    </SelectOption>
+                  ))}
+              </Select>
+            </Field>
+          </CardContent>
+        </Card>
 
-        <Field label="Embeddings (RAG)" hint="Provider usado pra indexar documentos. Default: gemini-embedding-001 / text-embedding-3-small.">
-          <select
-            value={embeddingsProvider}
-            onChange={(e) => setEmbeddingsProvider(e.target.value as 'GEMINI' | 'OPENAI')}
-            className={inputCls}
-          >
-            <option value="GEMINI">GEMINI</option>
-            <option value="OPENAI">OPENAI</option>
-          </select>
-        </Field>
+        <Card>
+          <CardHeader>
+            <CardTitle>Embeddings (RAG)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-4">
+            <Field label="Provider embeddings">
+              <Select value={embeddingsProvider} onChange={(v) => setEmbeddingsProvider(v as 'GEMINI' | 'OPENAI')}>
+                <SelectOption value="GEMINI">GEMINI</SelectOption>
+                <SelectOption value="OPENAI">OPENAI</SelectOption>
+              </Select>
+            </Field>
+            <Field
+              label="API key embeddings"
+              hint="Opcional. Vazio reutiliza a key de geração se o provider bater, ou cai no env."
+            >
+              <Input
+                type="password"
+                value={embeddingsApiKey}
+                onChange={(e) => setEmbeddingsApiKey(e.target.value)}
+                placeholder="••••••••"
+              />
+            </Field>
+          </CardContent>
+        </Card>
 
-        <Field
-          label="API key de embeddings"
-          hint="Opcional. Se vazio e o provider de embeddings bater com o de geração, reutiliza a key acima. Senão cai no env."
-        >
-          <input
-            type="password"
-            value={embeddingsApiKey}
-            onChange={(e) => setEmbeddingsApiKey(e.target.value)}
-            placeholder="••••••••"
-            className={inputCls}
-          />
-        </Field>
-
-        <Field label="Modelo" required hint={modelsError ?? (models.length === 0 ? 'Cole a API key e busque os modelos' : `${models.length} modelos disponíveis`)}>
-          <select
-            value={generationModel}
-            onChange={(e) => setGenerationModel(e.target.value)}
-            disabled={models.length === 0}
-            className={inputCls}
-          >
-            {models.length === 0 ? (
-              <option value="">— carregue os modelos —</option>
-            ) : (
-              models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))
-            )}
-          </select>
-        </Field>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="rounded-md px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" type="button" onClick={() => router.back()}>
             Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+          </Button>
+          <Button variant="primary" type="submit" loading={isSaving}>
             Criar e validar
-          </button>
+          </Button>
         </div>
       </form>
-    </div>
-  );
-}
-
-const inputCls =
-  'flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500';
-
-function Field({
-  label,
-  hint,
-  required,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      {children}
-      {hint && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{hint}</p>}
     </div>
   );
 }

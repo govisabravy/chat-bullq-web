@@ -1,9 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { aiAgentsService, type AiAgent } from '../services/ai-agents.service';
 import { channelsService } from '@/features/channels/services/channels.service';
+import { Card, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 
 export function ChannelsTab({ agent }: { agent: AiAgent }) {
   const queryClient = useQueryClient();
@@ -11,76 +14,85 @@ export function ChannelsTab({ agent }: { agent: AiAgent }) {
     queryKey: ['channels'],
     queryFn: () => channelsService.list(),
   });
-  const [selected, setSelected] = useState<Set<string>>(
-    new Set(agent.channels.map((c) => c.channelId)),
+  const initialAttached = useMemo(
+    () => new Set(agent.channels.map((c) => c.channelId)),
+    [agent.channels],
   );
-  const [saving, setSaving] = useState(false);
+  const [attached, setAttached] = useState<Set<string>>(initialAttached);
+  const [pending, setPending] = useState<Set<string>>(new Set());
 
-  const toggle = (id: string) => {
-    setSelected((prev) => {
+  const setBusy = (id: string, busy: boolean) => {
+    setPending((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      busy ? next.add(id) : next.delete(id);
       return next;
     });
   };
 
-  const save = async () => {
-    setSaving(true);
+  const toggleChannel = async (channelId: string, nextChecked: boolean) => {
+    if (pending.has(channelId)) return;
+    setBusy(channelId, true);
+    setAttached((prev) => {
+      const next = new Set(prev);
+      nextChecked ? next.add(channelId) : next.delete(channelId);
+      return next;
+    });
     try {
-      const before = new Set(agent.channels.map((c) => c.channelId));
-      const toAdd = [...selected].filter((id) => !before.has(id));
-      const toRemove = [...before].filter((id) => !selected.has(id));
-      for (const id of toAdd) await aiAgentsService.attachChannel(agent.id, id);
-      for (const id of toRemove) await aiAgentsService.detachChannel(agent.id, id);
-      toast.success('Canais atualizados');
+      if (nextChecked) {
+        await aiAgentsService.attachChannel(agent.id, channelId);
+        toast.success('Canal conectado');
+      } else {
+        await aiAgentsService.detachChannel(agent.id, channelId);
+        toast.success('Canal desconectado');
+      }
       queryClient.invalidateQueries({ queryKey: ['ai-agent', agent.id] });
+    } catch (err) {
+      setAttached((prev) => {
+        const next = new Set(prev);
+        nextChecked ? next.delete(channelId) : next.add(channelId);
+        return next;
+      });
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar canal');
     } finally {
-      setSaving(false);
+      setBusy(channelId, false);
     }
   };
 
+  if (allChannels.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+        Nenhum canal disponível. Configure um canal em Configurações → Canais.
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      {allChannels.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
-          Nenhum canal disponível. Configure um canal em Configurações → Canais.
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {allChannels.map((c) => {
-            const checked = selected.has(c.id);
-            return (
-              <li key={c.id}>
-                <label
-                  className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors ${
-                    checked
-                      ? 'border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/10'
-                      : 'border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/70'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggle(c.id)}
-                    className="h-4 w-4 accent-primary"
-                  />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{c.name}</p>
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{c.type}</p>
-                  </div>
-                </label>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <button
-        onClick={save}
-        disabled={saving}
-        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {saving ? 'Salvando...' : 'Salvar canais'}
-      </button>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {allChannels.map((c) => {
+        const checked = attached.has(c.id);
+        const busy = pending.has(c.id);
+        return (
+          <Card key={c.id} className="flex flex-col">
+            <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+              <div className="min-w-0 flex-1">
+                <CardTitle className="truncate text-foreground">{c.name}</CardTitle>
+              </div>
+              <Badge variant="info">{c.type}</Badge>
+            </CardHeader>
+            <CardFooter className="mt-auto flex items-center justify-between border-t border-border pt-4">
+              <span className="text-xs font-medium text-muted-foreground">
+                {checked ? 'Conectado' : 'Desconectado'}
+              </span>
+              <Switch
+                checked={checked}
+                disabled={busy}
+                onChange={(v) => toggleChannel(c.id, v)}
+                aria-label={`Conectar canal ${c.name}`}
+              />
+            </CardFooter>
+          </Card>
+        );
+      })}
     </div>
   );
 }

@@ -10,12 +10,26 @@ import {
   Music2,
   FileText,
   X,
-  Loader2,
+  Check,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { fileToBase64, formatBytes, MAX_MEDIA_BYTES } from '@/lib/file';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Tooltip } from '@/components/ui/tooltip';
+import { slideDown } from '@/lib/motion';
 import { inboxService, type Message, type SendMediaPayload } from '../services/inbox.service';
 
 interface ChatInputProps {
@@ -35,6 +49,13 @@ const ACCEPT_BY_KIND: Record<MediaKind, string> = {
     '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,application/*',
 };
 
+function formatElapsed(ms: number) {
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60).toString().padStart(2, '0');
+  const s = (total % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
 export function ChatInput({ conversationId, onSend, disabled, onMediaSent }: ChatInputProps) {
   const queryClient = useQueryClient();
   const [text, setText] = useState('');
@@ -43,11 +64,23 @@ export function ChatInput({ conversationId, onSend, disabled, onMediaSent }: Cha
   const [caption, setCaption] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordElapsed, setRecordElapsed] = useState(0);
+  const [audioLevels, setAudioLevels] = useState<number[]>(() => Array(28).fill(0));
+  const [recordedAudio, setRecordedAudio] = useState<
+    | { blob: Blob; blobUrl: string; mime: string; durationMs: number }
+    | null
+  >(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pickKindRef = useRef<MediaKind>('IMAGE');
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recordCancelRef = useRef(false);
+  const recordStartRef = useRef<number>(0);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const injectOptimistic = useCallback((msg: Message, blobUrl: string) => {
     queryClient.setQueryData(['messages', conversationId], (old: any) => {
@@ -143,6 +176,64 @@ export function ChatInput({ conversationId, onSend, disabled, onMediaSent }: Cha
     }
   }, [pendingFile, caption, conversationId, isUploading, cancelPending, onMediaSent, injectOptimistic]);
 
+  const clearRecordTimer = () => {
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+  };
+
+  const stopAnalyser = () => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    analyserRef.current = null;
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    setAudioLevels(Array(28).fill(0));
+  };
+
+  const startAnalyser = (stream: MediaStream) => {
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
+      audioContextRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.6;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const barCount = 28;
+
+      const tick = () => {
+        const a = analyserRef.current;
+        if (!a) return;
+        a.getByteFrequencyData(data);
+        const binSize = Math.max(1, Math.floor(data.length / barCount));
+        const bars: number[] = [];
+        for (let i = 0; i < barCount; i++) {
+          let sum = 0;
+          for (let j = 0; j < binSize; j++) {
+            sum += data[i * binSize + j] ?? 0;
+          }
+          const avg = sum / binSize / 255;
+          bars.push(Math.min(1, avg * 2.4));
+        }
+        setAudioLevels(bars);
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    } catch {}
+  };
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -153,11 +244,19 @@ export function ChatInput({ conversationId, onSend, disabled, onMediaSent }: Cha
           : 'audio/webm';
       const recorder = new MediaRecorder(stream, { mimeType: mime });
       chunksRef.current = [];
+      recordCancelRef.current = false;
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
-      recorder.onstop = async () => {
+      recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
+        clearRecordTimer();
+        stopAnalyser();
+        const durationMs = Date.now() - recordStartRef.current;
+        if (recordCancelRef.current) {
+          chunksRef.current = [];
+          return;
+        }
         const blob = new Blob(chunksRef.current, { type: mime });
         if (blob.size === 0) return;
         if (blob.size > MAX_MEDIA_BYTES) {
@@ -165,27 +264,16 @@ export function ChatInput({ conversationId, onSend, disabled, onMediaSent }: Cha
           return;
         }
         const blobUrl = URL.createObjectURL(blob);
-        try {
-          setIsUploading(true);
-          const base64 = await fileToBase64(blob);
-          const msg = await inboxService.sendMedia({
-            conversationId,
-            type: 'AUDIO',
-            mediaBase64: base64,
-            mimeType: mime,
-            fileName: `audio-${Date.now()}.${mime.includes('ogg') ? 'ogg' : 'webm'}`,
-          });
-          injectOptimistic(msg, blobUrl);
-          onMediaSent?.();
-        } catch (err) {
-          URL.revokeObjectURL(blobUrl);
-          toast.error(err instanceof Error ? err.message : 'Erro ao enviar áudio');
-        } finally {
-          setIsUploading(false);
-        }
+        setRecordedAudio({ blob, blobUrl, mime, durationMs });
       };
       recorderRef.current = recorder;
       recorder.start();
+      recordStartRef.current = Date.now();
+      setRecordElapsed(0);
+      recordTimerRef.current = setInterval(() => {
+        setRecordElapsed(Date.now() - recordStartRef.current);
+      }, 100);
+      startAnalyser(stream);
       setIsRecording(true);
     } catch (err) {
       toast.error('Permita acesso ao microfone');
@@ -194,29 +282,73 @@ export function ChatInput({ conversationId, onSend, disabled, onMediaSent }: Cha
 
   const stopRecording = () => {
     const recorder = recorderRef.current;
+    recordCancelRef.current = false;
     if (recorder && recorder.state !== 'inactive') {
       recorder.stop();
     }
     setIsRecording(false);
   };
 
+  const cancelRecording = () => {
+    const recorder = recorderRef.current;
+    recordCancelRef.current = true;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+    }
+    clearRecordTimer();
+    stopAnalyser();
+    setIsRecording(false);
+    setRecordElapsed(0);
+  };
+
+  const discardRecordedAudio = () => {
+    if (recordedAudio) URL.revokeObjectURL(recordedAudio.blobUrl);
+    setRecordedAudio(null);
+  };
+
+  const sendRecordedAudio = async () => {
+    if (!recordedAudio || isUploading) return;
+    setIsUploading(true);
+    try {
+      const base64 = await fileToBase64(recordedAudio.blob);
+      const msg = await inboxService.sendMedia({
+        conversationId,
+        type: 'AUDIO',
+        mediaBase64: base64,
+        mimeType: recordedAudio.mime,
+        fileName: `audio-${Date.now()}.${recordedAudio.mime.includes('ogg') ? 'ogg' : 'webm'}`,
+      });
+      injectOptimistic(msg, recordedAudio.blobUrl);
+      setRecordedAudio(null);
+      onMediaSent?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar áudio');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (pendingFile?.previewUrl) URL.revokeObjectURL(pendingFile.previewUrl);
+      if (recordedAudio) URL.revokeObjectURL(recordedAudio.blobUrl);
       if (recorderRef.current && recorderRef.current.state !== 'inactive') {
         recorderRef.current.stop();
       }
+      clearRecordTimer();
+      stopAnalyser();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (disabled) {
     return (
-      <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-3 text-center text-sm text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/50">
+      <div className="border-t border-border bg-card px-4 py-3 text-center text-sm text-muted-foreground">
         Conversa encerrada — reabra para enviar mensagens
       </div>
     );
   }
+
+  const hasText = text.trim().length > 0;
 
   return (
     <>
@@ -227,161 +359,234 @@ export function ChatInput({ conversationId, onSend, disabled, onMediaSent }: Cha
         onChange={handleFileChange}
       />
 
-      {pendingFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-900">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                Enviar {pendingFile.kind.toLowerCase()}
-              </h3>
-              <button
-                onClick={cancelPending}
-                className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="mb-3 rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
-              {pendingFile.kind === 'IMAGE' && pendingFile.previewUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={pendingFile.previewUrl}
-                  alt="preview"
-                  className="mx-auto max-h-56 rounded-md object-contain"
-                />
-              )}
-              {pendingFile.kind === 'VIDEO' && pendingFile.previewUrl && (
-                <video
-                  src={pendingFile.previewUrl}
-                  controls
-                  preload="metadata"
-                  className="mx-auto max-h-56 rounded-md"
-                />
-              )}
-              {(pendingFile.kind === 'AUDIO' || pendingFile.kind === 'DOCUMENT') && (
-                <div className="flex items-center gap-3">
-                  {pendingFile.kind === 'AUDIO' ? <Music2 className="h-8 w-8 text-zinc-400" /> : <FileText className="h-8 w-8 text-zinc-400" />}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{pendingFile.file.name}</p>
-                    <p className="text-xs text-zinc-500">{formatBytes(pendingFile.file.size)}</p>
+      <Dialog open={!!pendingFile} onOpenChange={(v) => !v && cancelPending()}>
+        <DialogContent size="lg">
+          {pendingFile && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Enviar {pendingFile.kind.toLowerCase()}</DialogTitle>
+                <DialogDescription>
+                  {pendingFile.file.name} — {formatBytes(pendingFile.file.size)}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-4 rounded-lg border border-border bg-muted/40 p-3">
+                {pendingFile.kind === 'IMAGE' && pendingFile.previewUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={pendingFile.previewUrl}
+                    alt="preview"
+                    className="mx-auto max-h-64 rounded-md object-contain"
+                  />
+                )}
+                {pendingFile.kind === 'VIDEO' && pendingFile.previewUrl && (
+                  <video
+                    src={pendingFile.previewUrl}
+                    controls
+                    preload="metadata"
+                    className="mx-auto max-h-64 rounded-md"
+                  />
+                )}
+                {(pendingFile.kind === 'AUDIO' || pendingFile.kind === 'DOCUMENT') && (
+                  <div className="flex items-center gap-3">
+                    {pendingFile.kind === 'AUDIO' ? (
+                      <Music2 className="h-8 w-8 text-muted-foreground" />
+                    ) : (
+                      <FileText className="h-8 w-8 text-muted-foreground" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">{pendingFile.file.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatBytes(pendingFile.file.size)}</p>
+                    </div>
                   </div>
-                </div>
+                )}
+              </div>
+
+              {(pendingFile.kind === 'IMAGE' || pendingFile.kind === 'VIDEO' || pendingFile.kind === 'DOCUMENT') && (
+                <Textarea
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder="Legenda (opcional)..."
+                  rows={2}
+                  className="mt-3 min-h-[64px]"
+                />
               )}
-            </div>
-            {(pendingFile.kind === 'IMAGE' || pendingFile.kind === 'VIDEO' || pendingFile.kind === 'DOCUMENT') && (
-              <textarea
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                placeholder="Legenda (opcional)..."
-                rows={2}
-                className="mb-3 w-full resize-none rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-              />
-            )}
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={cancelPending}
-                disabled={isUploading}
-                className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={sendPending}
-                disabled={isUploading}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {isUploading && <Loader2 className="h-4 w-4 animate-spin" />}
-                Enviar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      <div className="border-t border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="flex items-end gap-2">
-          <Menu as="div" className="relative">
-            <MenuButton className="mb-1 rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
-              <Paperclip className="h-5 w-5" />
-            </MenuButton>
-            <MenuItems
-              anchor="top start"
-              className="z-30 mb-1 w-44 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg outline-none dark:border-zinc-700 dark:bg-zinc-900"
-            >
-              <MenuItem>
-                <button
-                  onClick={() => openPicker('IMAGE')}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  <ImageIcon className="h-4 w-4" /> Imagem
-                </button>
-              </MenuItem>
-              <MenuItem>
-                <button
-                  onClick={() => openPicker('VIDEO')}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  <VideoIcon className="h-4 w-4" /> Vídeo
-                </button>
-              </MenuItem>
-              <MenuItem>
-                <button
-                  onClick={() => openPicker('AUDIO')}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  <Music2 className="h-4 w-4" /> Áudio (arquivo)
-                </button>
-              </MenuItem>
-              <MenuItem>
-                <button
-                  onClick={() => openPicker('DOCUMENT')}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  <FileText className="h-4 w-4" /> Documento
-                </button>
-              </MenuItem>
-            </MenuItems>
-          </Menu>
-
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onInput={handleInput}
-            placeholder={isRecording ? 'Gravando...' : 'Digite uma mensagem...'}
-            rows={1}
-            disabled={isRecording}
-            className="max-h-40 min-h-[40px] flex-1 resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-          />
-
-          {text.trim() ? (
-            <button
-              onClick={handleSubmit}
-              disabled={!text.trim() || isSending}
-              className="mb-1 rounded-lg bg-primary p-2.5 text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-            >
-              <Send className="h-5 w-5" />
-            </button>
-          ) : (
-            <button
-              onMouseDown={startRecording}
-              onMouseUp={stopRecording}
-              onMouseLeave={() => isRecording && stopRecording()}
-              onTouchStart={startRecording}
-              onTouchEnd={stopRecording}
-              disabled={isUploading}
-              className={`mb-1 rounded-lg p-2.5 transition-colors disabled:opacity-50 ${
-                isRecording
-                  ? 'animate-pulse bg-red-500 text-white'
-                  : 'bg-primary text-primary-foreground hover:bg-primary/90'
-              }`}
-              title="Pressione e segure para gravar"
-            >
-              <Mic className="h-5 w-5" />
-            </button>
+              <DialogFooter>
+                <Button variant="outline" onClick={cancelPending} disabled={isUploading}>
+                  Cancelar
+                </Button>
+                <Button variant="primary" loading={isUploading} onClick={sendPending}>
+                  Enviar
+                </Button>
+              </DialogFooter>
+            </>
           )}
-        </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="border-t border-border bg-card p-3">
+        <AnimatePresence mode="wait" initial={false}>
+          {recordedAudio ? (
+            <motion.div
+              key="preview"
+              variants={slideDown}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="flex items-center gap-3"
+            >
+              <Tooltip content="Descartar">
+                <Button variant="ghost" size="icon" onClick={discardRecordedAudio} disabled={isUploading}>
+                  <Trash2 className="h-5 w-5 text-destructive" />
+                </Button>
+              </Tooltip>
+              <audio
+                src={recordedAudio.blobUrl}
+                controls
+                className="h-9 flex-1 min-w-0"
+              />
+              <span className="text-xs font-mono text-muted-foreground shrink-0">
+                {formatElapsed(recordedAudio.durationMs)}
+              </span>
+              <Tooltip content="Enviar áudio">
+                <Button variant="primary" size="icon" onClick={sendRecordedAudio} loading={isUploading}>
+                  {!isUploading && <Send className="h-5 w-5" />}
+                </Button>
+              </Tooltip>
+            </motion.div>
+          ) : isRecording ? (
+            <motion.div
+              key="recording"
+              variants={slideDown}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="flex items-center gap-3"
+            >
+              <span className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse shrink-0" />
+              <span className="text-sm font-mono text-foreground tabular-nums shrink-0">
+                {formatElapsed(recordElapsed)}
+              </span>
+              <div className="flex h-9 flex-1 items-center gap-[3px] px-2">
+                {audioLevels.map((level, i) => (
+                  <span
+                    key={i}
+                    className="flex-1 rounded-full bg-primary"
+                    style={{
+                      height: `${Math.max(10, level * 100)}%`,
+                      opacity: 0.35 + level * 0.65,
+                      transition: 'height 80ms linear, opacity 80ms linear',
+                    }}
+                  />
+                ))}
+              </div>
+              <Tooltip content="Cancelar">
+                <Button variant="ghost" size="icon" onClick={cancelRecording}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </Tooltip>
+              <Tooltip content="Parar e revisar">
+                <Button variant="primary" size="icon" onClick={stopRecording}>
+                  <Check className="h-5 w-5" />
+                </Button>
+              </Tooltip>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="toolbar"
+              variants={slideDown}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="flex items-end gap-2"
+            >
+              <Menu as="div" className="relative">
+                <Tooltip content="Anexar arquivo">
+                  <MenuButton
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md text-sm font-medium text-muted-foreground transition-smooth hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-focus data-[open]:bg-accent data-[open]:text-accent-foreground"
+                    aria-label="Anexar arquivo"
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </MenuButton>
+                </Tooltip>
+                <MenuItems
+                  anchor="top start"
+                  className="z-30 mb-1 w-48 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-soft outline-none transition-smooth"
+                >
+                  <MenuItem>
+                    <button
+                      onClick={() => openPicker('IMAGE')}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-foreground transition-smooth data-[focus]:bg-accent data-[focus]:text-accent-foreground"
+                    >
+                      <ImageIcon className="h-4 w-4" /> Imagem
+                    </button>
+                  </MenuItem>
+                  <MenuItem>
+                    <button
+                      onClick={() => openPicker('VIDEO')}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-foreground transition-smooth data-[focus]:bg-accent data-[focus]:text-accent-foreground"
+                    >
+                      <VideoIcon className="h-4 w-4" /> Vídeo
+                    </button>
+                  </MenuItem>
+                  <MenuItem>
+                    <button
+                      onClick={() => openPicker('AUDIO')}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-foreground transition-smooth data-[focus]:bg-accent data-[focus]:text-accent-foreground"
+                    >
+                      <Music2 className="h-4 w-4" /> Áudio (arquivo)
+                    </button>
+                  </MenuItem>
+                  <MenuItem>
+                    <button
+                      onClick={() => openPicker('DOCUMENT')}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-foreground transition-smooth data-[focus]:bg-accent data-[focus]:text-accent-foreground"
+                    >
+                      <FileText className="h-4 w-4" /> Documento
+                    </button>
+                  </MenuItem>
+                </MenuItems>
+              </Menu>
+
+              <Textarea
+                ref={textareaRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onInput={handleInput}
+                placeholder="Digite uma mensagem..."
+                rows={1}
+                className="max-h-40 min-h-[40px] flex-1 px-4 py-2"
+              />
+
+              {hasText ? (
+                <Tooltip content="Enviar">
+                  <Button
+                    variant="primary"
+                    size="icon"
+                    onClick={handleSubmit}
+                    disabled={!hasText || isSending}
+                    loading={isSending}
+                  >
+                    {!isSending && <Send className="h-5 w-5" />}
+                  </Button>
+                </Tooltip>
+              ) : (
+                <Tooltip content="Gravar áudio">
+                  <Button
+                    variant="primary"
+                    size="icon"
+                    onClick={startRecording}
+                    disabled={isUploading}
+                  >
+                    <Mic className="h-5 w-5" />
+                  </Button>
+                </Tooltip>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </>
   );

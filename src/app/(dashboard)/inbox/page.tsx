@@ -1,49 +1,72 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { MessageSquare } from 'lucide-react';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryState, parseAsString } from 'nuqs';
 import { ConversationList } from '@/features/inbox/components/conversation-list';
 import { ChatPanel } from '@/features/inbox/components/chat-panel';
-import type { Conversation } from '@/features/inbox/services/inbox.service';
+import { ChatEmptyState } from '@/features/inbox/components/chat-empty-state';
+import { inboxService } from '@/features/inbox/services/inbox.service';
 
 export default function InboxPage() {
-  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
+  const [activeId, setActiveId] = useQueryState('c', parseAsString);
   const queryClient = useQueryClient();
+
+  const { data: activeConversation } = useQuery({
+    queryKey: ['conversation', activeId],
+    queryFn: () => inboxService.getConversation(activeId as string),
+    enabled: !!activeId,
+    staleTime: 60 * 1000,
+  });
 
   const handleConversationUpdate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
-    if (activeConversation) {
-      queryClient.invalidateQueries({
-        queryKey: ['messages', activeConversation.id],
-      });
+    if (activeId) {
+      queryClient.invalidateQueries({ queryKey: ['conversation', activeId] });
+      queryClient.invalidateQueries({ queryKey: ['messages', activeId] });
     }
-  }, [queryClient, activeConversation]);
+  }, [queryClient, activeId]);
+
+  const handleSelect = useCallback(
+    (id: string) => {
+      setActiveId(id);
+    },
+    [setActiveId],
+  );
+
+  const handlePrefetch = useCallback(
+    (id: string) => {
+      queryClient.prefetchQuery({
+        queryKey: ['messages', id],
+        queryFn: () => inboxService.getMessages(id),
+        staleTime: 5 * 60 * 1000,
+      });
+      queryClient.prefetchQuery({
+        queryKey: ['conversation', id],
+        queryFn: () => inboxService.getConversation(id),
+        staleTime: 60 * 1000,
+      });
+    },
+    [queryClient],
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-1">
       <ConversationList
-        activeId={activeConversation?.id || null}
-        onSelect={setActiveConversation}
+        activeId={activeId}
+        onSelect={handleSelect}
+        onPrefetch={handlePrefetch}
       />
 
-      {activeConversation ? (
+      {activeId && activeConversation ? (
         <ChatPanel
-          key={activeConversation.id}
+          key={activeId}
           conversation={activeConversation}
           onConversationUpdate={handleConversationUpdate}
         />
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-900/50">
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-            <MessageSquare className="h-10 w-10 text-zinc-300 dark:text-zinc-600" />
-          </div>
-          <h2 className="mt-4 text-lg font-semibold text-zinc-700 dark:text-zinc-300">
-            Chat BullQ
-          </h2>
-          <p className="mt-1 text-sm text-zinc-400 dark:text-zinc-500">
-            Selecione uma conversa para começar
-          </p>
+        <div className="flex flex-1 items-center justify-center bg-background">
+          <ChatEmptyState />
         </div>
       )}
     </div>

@@ -1,21 +1,57 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { aiAgentsService, type AiAgent, type AiProvider } from '../services/ai-agents.service';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectOption } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { AgentStickySaveBar } from './agent-sticky-save-bar';
 
 const PROVIDERS: AiProvider[] = ['GEMINI', 'OPENAI', 'ANTHROPIC', 'OPENROUTER'];
 
-export function GeneralTab({ agent }: { agent: AiAgent }) {
-  const queryClient = useQueryClient();
-  const { data: allAgents = [] } = useQuery({
-    queryKey: ['ai-agents'],
-    queryFn: () => aiAgentsService.list(),
-  });
-  const handoffCandidates = allAgents.filter((a) => a.id !== agent.id && a.isActive);
-  const [form, setForm] = useState<Record<string, any>>({
+type FormState = {
+  name: string;
+  description: string;
+  systemPrompt: string;
+  welcomeMessage: string;
+  generationProvider: AiProvider;
+  generationModel: string;
+  embeddingsProvider: AiProvider;
+  embeddingsModel: string;
+  embeddingsApiKey: string;
+  fallbackModel: string;
+  apiKey: string;
+  temperature: number;
+  maxTokens: number;
+  historyTokenBudget: number;
+  isActive: boolean;
+  respondInGroups: boolean;
+  debounceMs: number;
+  sendTypingIndicator: boolean;
+  dailyTokenCap: number | string;
+  dailyMessageCap: number | string;
+  handoffMessage: string;
+  handoffTargetIds: string[];
+  pauseBehavior: 'MANUAL' | 'AUTO_RESUME';
+  autoResumeMinutes: number;
+};
+
+function buildInitialForm(agent: AiAgent): FormState {
+  return {
     name: agent.name,
     description: agent.description ?? '',
     systemPrompt: agent.systemPrompt,
@@ -41,7 +77,19 @@ export function GeneralTab({ agent }: { agent: AiAgent }) {
       ((agent as any).handoffTargets?.map((h: any) => h.targetAgentId) ?? []) as string[],
     pauseBehavior: agent.pauseBehavior ?? 'MANUAL',
     autoResumeMinutes: agent.autoResumeMinutes ?? 15,
+  };
+}
+
+export function GeneralTab({ agent }: { agent: AiAgent }) {
+  const queryClient = useQueryClient();
+  const { data: allAgents = [] } = useQuery({
+    queryKey: ['ai-agents'],
+    queryFn: () => aiAgentsService.list(),
   });
+  const handoffCandidates = allAgents.filter((a) => a.id !== agent.id && a.isActive);
+
+  const initialForm = useMemo(() => buildInitialForm(agent), [agent]);
+  const [form, setForm] = useState<FormState>(initialForm);
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
   const [models, setModels] = useState<string[]>([agent.generationModel]);
@@ -51,7 +99,17 @@ export function GeneralTab({ agent }: { agent: AiAgent }) {
   const [loadingEmbeddingsModels, setLoadingEmbeddingsModels] = useState(false);
   const [embeddingsModelsError, setEmbeddingsModelsError] = useState<string | null>(null);
 
-  const update = (k: string, v: any) => setForm((s) => ({ ...s, [k]: v }));
+  const update = (k: keyof FormState, v: any) => setForm((s) => ({ ...s, [k]: v }));
+
+  const isDirty = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(initialForm),
+    [form, initialForm],
+  );
+
+  const resetToAgent = () => {
+    setForm(initialForm);
+    setModelsError(null);
+  };
 
   const fetchModels = async (provider: AiProvider, key?: string) => {
     const apiKey = key ?? form.apiKey;
@@ -166,394 +224,450 @@ export function GeneralTab({ agent }: { agent: AiAgent }) {
 
   return (
     <div className="space-y-5">
-      <Section title="Identidade">
-        <Row label="Nome">
-          <input value={form.name} onChange={(e) => update('name', e.target.value)} className={inputCls} />
-        </Row>
-        <Row label="Descrição">
-          <input
+      <AgentSection title="Identidade" description="Como o agente se identifica e responde.">
+        <Field label="Nome" htmlFor="agent-name">
+          <Input
+            id="agent-name"
+            value={form.name}
+            onChange={(e) => update('name', e.target.value)}
+          />
+        </Field>
+        <Field label="Descrição" htmlFor="agent-description">
+          <Input
+            id="agent-description"
             value={form.description}
             onChange={(e) => update('description', e.target.value)}
             placeholder="Opcional"
-            className={inputCls}
           />
-        </Row>
-        <Row label="System prompt" hint="Variáveis: {contactName} {contactPhone} {protocol} {currentDate} {currentTime}">
-          <textarea
+        </Field>
+        <Field
+          label="System prompt"
+          htmlFor="agent-system-prompt"
+          full
+          hint="Variáveis: {contactName} {contactPhone} {protocol} {currentDate} {currentTime}"
+        >
+          <Textarea
+            id="agent-system-prompt"
             value={form.systemPrompt}
             onChange={(e) => update('systemPrompt', e.target.value)}
             rows={6}
-            className={`${inputCls} h-auto font-mono text-xs leading-relaxed`}
+            className="font-mono text-xs leading-relaxed"
           />
-        </Row>
-        <Row label="Mensagem de boas-vindas" hint="Enviada na primeira interação de cada conversa. Deixe vazio pra desativar.">
-          <textarea
+        </Field>
+        <Field
+          label="Mensagem de boas-vindas"
+          htmlFor="agent-welcome"
+          full
+          hint="Enviada na primeira interação de cada conversa. Deixe vazio pra desativar."
+        >
+          <Textarea
+            id="agent-welcome"
             value={form.welcomeMessage}
             onChange={(e) => update('welcomeMessage', e.target.value)}
             rows={2}
-            className={`${inputCls} h-auto`}
           />
-        </Row>
-      </Section>
+        </Field>
+      </AgentSection>
 
-      <Section title="Provedor e modelo">
-        <Row label="Provider">
-          <select
+      <AgentSection title="Provedor e modelo" description="Modelo de geração principal e fallback.">
+        <Field label="Provider">
+          <Select
             value={form.generationProvider}
-            onChange={(e) => {
-              const p = e.target.value as AiProvider;
-              update('generationProvider', p);
+            onChange={(v) => {
+              update('generationProvider', v as AiProvider);
               setModels([]);
               setModelsError(null);
             }}
-            className={inputCls}
           >
             {PROVIDERS.map((p) => (
-              <option key={p} value={p}>
+              <SelectOption key={p} value={p}>
                 {p}
-              </option>
+              </SelectOption>
             ))}
-          </select>
-        </Row>
-        <Row label="API key" hint="Deixe vazio pra manter a key atual. Armazenada criptografada.">
+          </Select>
+        </Field>
+        <Field
+          label="API key"
+          htmlFor="agent-api-key"
+          hint="Deixe vazio pra manter a key atual. Armazenada criptografada."
+        >
           <div className="flex gap-2">
-            <input
+            <Input
+              id="agent-api-key"
               type="password"
               value={form.apiKey}
               onChange={(e) => update('apiKey', e.target.value)}
               placeholder="••••••••"
-              className={inputCls}
             />
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="md"
               onClick={() => fetchModels(form.generationProvider)}
               disabled={loadingModels}
-              className="inline-flex h-10 items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               title="Buscar modelos"
             >
-              {loadingModels ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            </button>
+              {loadingModels ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-        </Row>
-        <Row
+        </Field>
+        <Field
           label="Modelo"
-          hint={modelsError ?? (models.length <= 1 ? 'Clique 🔄 pra listar modelos (usa a key salva)' : `${models.length} modelos disponíveis`)}
+          hint={
+            modelsError ??
+            (models.length <= 1
+              ? 'Clique no botão pra listar modelos (usa a key salva)'
+              : `${models.length} modelos disponíveis`)
+          }
         >
-          <select
+          <Select
             value={form.generationModel}
-            onChange={(e) => update('generationModel', e.target.value)}
-            className={inputCls}
+            onChange={(v) => update('generationModel', v)}
+            placeholder="—"
           >
-            {models.length === 0 ? (
-              <option value="">—</option>
-            ) : (
-              models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))
-            )}
-          </select>
-        </Row>
-        <Row
+            {models.map((m) => (
+              <SelectOption key={m} value={m}>
+                {m}
+              </SelectOption>
+            ))}
+          </Select>
+        </Field>
+        <Field
           label="Modelo fallback"
           hint="Opcional. Usado se o modelo principal retornar 429 / 503 / rate-limit. Mesmo provider."
         >
-          <select
+          <Select
             value={form.fallbackModel}
-            onChange={(e) => update('fallbackModel', e.target.value)}
-            className={inputCls}
+            onChange={(v) => update('fallbackModel', v)}
+            placeholder="— sem fallback —"
           >
-            <option value="">— sem fallback —</option>
+            <SelectOption value="">— sem fallback —</SelectOption>
             {models
               .filter((m) => m !== form.generationModel)
               .map((m) => (
-                <option key={m} value={m}>
+                <SelectOption key={m} value={m}>
                   {m}
-                </option>
+                </SelectOption>
               ))}
-          </select>
-        </Row>
-      </Section>
+          </Select>
+        </Field>
+      </AgentSection>
 
-      <Section title="Embeddings (RAG)">
-        <Row label="Provider de embeddings" hint="Usado pra indexar documentos e buscar por similaridade. Dim fixa 768.">
-          <select
+      <AgentSection
+        title="Embeddings (RAG)"
+        description="Indexação de documentos e busca por similaridade. Dim fixa 768."
+      >
+        <Field label="Provider de embeddings">
+          <Select
             value={form.embeddingsProvider}
-            onChange={(e) => {
-              update('embeddingsProvider', e.target.value);
+            onChange={(v) => {
+              update('embeddingsProvider', v as AiProvider);
               setEmbeddingsModels([]);
               setEmbeddingsModelsError(null);
             }}
-            className={inputCls}
           >
-            <option value="GEMINI">GEMINI</option>
-            <option value="OPENAI">OPENAI</option>
-          </select>
-        </Row>
-        <Row
+            <SelectOption value="GEMINI">GEMINI</SelectOption>
+            <SelectOption value="OPENAI">OPENAI</SelectOption>
+          </Select>
+        </Field>
+        <Field
           label="API key de embeddings"
+          htmlFor="agent-embeddings-key"
           hint="Opcional. Se vazio, usa a key de geração (quando provider bate) ou env. Armazenada criptografada."
         >
           <div className="flex gap-2">
-            <input
+            <Input
+              id="agent-embeddings-key"
               type="password"
               value={form.embeddingsApiKey}
               onChange={(e) => update('embeddingsApiKey', e.target.value)}
               placeholder="••••••••"
-              className={inputCls}
             />
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="md"
               onClick={() => fetchEmbeddingsModels()}
               disabled={loadingEmbeddingsModels}
-              className="inline-flex h-10 items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               title="Buscar modelos de embeddings"
             >
-              {loadingEmbeddingsModels ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            </button>
+              {loadingEmbeddingsModels ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-        </Row>
-        <Row
+        </Field>
+        <Field
           label="Modelo de embeddings"
           hint={
             embeddingsModelsError ??
             (embeddingsModels.length <= 1
-              ? 'Clique 🔄 pra listar modelos disponíveis'
+              ? 'Clique no botão pra listar modelos disponíveis'
               : `${embeddingsModels.length} modelos disponíveis`)
           }
         >
-          <select
+          <Select
             value={form.embeddingsModel}
-            onChange={(e) => update('embeddingsModel', e.target.value)}
-            className={inputCls}
+            onChange={(v) => update('embeddingsModel', v)}
+            placeholder="—"
           >
-            {embeddingsModels.length === 0 ? (
-              <option value="">—</option>
-            ) : (
-              embeddingsModels.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))
-            )}
-          </select>
-        </Row>
-      </Section>
+            {embeddingsModels.map((m) => (
+              <SelectOption key={m} value={m}>
+                {m}
+              </SelectOption>
+            ))}
+          </Select>
+        </Field>
+      </AgentSection>
 
-      <Section title="Pause / Handoff">
-        <Row
+      <AgentSection
+        title="Pause / Handoff"
+        description="Comportamento quando o atendente assume ou transfere a conversa."
+      >
+        <Field
           label="Comportamento de pausa"
           hint="Manual: só o atendente retoma. Auto: retoma após X minutos sem resposta do atendente."
         >
-          <select
+          <Select
             value={form.pauseBehavior}
-            onChange={(e) => update('pauseBehavior', e.target.value)}
-            className={inputCls}
+            onChange={(v) => update('pauseBehavior', v as 'MANUAL' | 'AUTO_RESUME')}
           >
-            <option value="MANUAL">MANUAL</option>
-            <option value="AUTO_RESUME">AUTO_RESUME</option>
-          </select>
-        </Row>
-        {form.pauseBehavior === 'AUTO_RESUME' && (
-          <Row label="Retomar após (minutos)">
-            <input
+            <SelectOption value="MANUAL">MANUAL</SelectOption>
+            <SelectOption value="AUTO_RESUME">AUTO_RESUME</SelectOption>
+          </Select>
+        </Field>
+        {form.pauseBehavior === 'AUTO_RESUME' ? (
+          <Field label="Retomar após (minutos)" htmlFor="agent-auto-resume">
+            <Input
+              id="agent-auto-resume"
               type="number"
               min={1}
               max={240}
               value={form.autoResumeMinutes}
               onChange={(e) => update('autoResumeMinutes', Number(e.target.value))}
-              className={inputCls}
             />
-          </Row>
-        )}
-        <Row
+          </Field>
+        ) : null}
+        <Field
           label="Mensagem de handoff"
+          htmlFor="agent-handoff-message"
+          full
           hint="Enviada ao contato antes da transferência efetivar. Deixe vazio para handoff silencioso."
         >
-          <textarea
+          <Textarea
+            id="agent-handoff-message"
             rows={2}
             value={form.handoffMessage}
             onChange={(e) => update('handoffMessage', e.target.value)}
-            className={`${inputCls} h-auto`}
           />
-        </Row>
-        <Row label="Agentes destino permitidos para handoff">
+        </Field>
+        <div className="flex flex-col gap-2 md:col-span-2">
+          <Label>Agentes destino permitidos para handoff</Label>
           {handoffCandidates.length === 0 ? (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs text-muted-foreground">
               Nenhum outro agente ativo disponível.
             </p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2">
               {handoffCandidates.map((a) => {
                 const checked = form.handoffTargetIds.includes(a.id);
                 return (
                   <label
                     key={a.id}
-                    className={`inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs transition-colors ${
-                      checked
-                        ? 'border-primary/50 bg-primary/10 text-primary dark:border-primary/40'
-                        : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800'
-                    }`}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm transition-smooth hover:bg-accent"
                   >
-                    <input
-                      type="checkbox"
-                      className="h-3.5 w-3.5 accent-primary"
+                    <Checkbox
                       checked={checked}
-                      onChange={() => {
-                        const next = checked
-                          ? form.handoffTargetIds.filter((id: string) => id !== a.id)
-                          : [...form.handoffTargetIds, a.id];
-                        update('handoffTargetIds', next);
+                      onChange={(next) => {
+                        const list = next
+                          ? [...form.handoffTargetIds, a.id]
+                          : form.handoffTargetIds.filter((id: string) => id !== a.id);
+                        update('handoffTargetIds', list);
                       }}
                     />
-                    {a.name}
+                    <span>{a.name}</span>
                   </label>
                 );
               })}
             </div>
           )}
-        </Row>
-      </Section>
-
-      <Section title="Parâmetros do modelo">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Row label="Temperature">
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              max="2"
-              value={form.temperature}
-              onChange={(e) => update('temperature', Number(e.target.value))}
-              className={inputCls}
-            />
-          </Row>
-          <Row label="Max tokens">
-            <input
-              type="number"
-              min="64"
-              max="8192"
-              value={form.maxTokens}
-              onChange={(e) => update('maxTokens', Number(e.target.value))}
-              className={inputCls}
-            />
-          </Row>
-          <Row label="History token budget">
-            <input
-              type="number"
-              min="500"
-              value={form.historyTokenBudget}
-              onChange={(e) => update('historyTokenBudget', Number(e.target.value))}
-              className={inputCls}
-            />
-          </Row>
-          <Row label="Debounce (ms)">
-            <input
-              type="number"
-              min="0"
-              max="60000"
-              value={form.debounceMs}
-              onChange={(e) => update('debounceMs', Number(e.target.value))}
-              className={inputCls}
-            />
-          </Row>
         </div>
-      </Section>
+      </AgentSection>
 
-      <Section title="Limites diários">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Row label="Cap de tokens/dia" hint="Vazio = ilimitado">
-            <input
-              type="number"
-              min="1"
-              value={form.dailyTokenCap}
-              onChange={(e) => update('dailyTokenCap', e.target.value)}
-              className={inputCls}
-            />
-          </Row>
-          <Row label="Cap de mensagens/dia" hint="Vazio = ilimitado">
-            <input
-              type="number"
-              min="1"
-              value={form.dailyMessageCap}
-              onChange={(e) => update('dailyMessageCap', e.target.value)}
-              className={inputCls}
-            />
-          </Row>
-        </div>
-      </Section>
-
-      <Section title="Comportamento">
-        <div className="flex flex-wrap gap-2">
-          <Switch label="Ativo" checked={form.isActive} onChange={(v) => update('isActive', v)} />
-          <Switch
-            label="Responder em grupos"
-            checked={form.respondInGroups}
-            onChange={(v) => update('respondInGroups', v)}
+      <AgentSection title="Parâmetros do modelo" description="Tunning de geração e contexto.">
+        <Field label="Temperature" htmlFor="agent-temperature">
+          <Input
+            id="agent-temperature"
+            type="number"
+            step="0.1"
+            min="0"
+            max="2"
+            value={form.temperature}
+            onChange={(e) => update('temperature', Number(e.target.value))}
           />
-          <Switch
-            label="Mostrar 'digitando...'"
-            checked={form.sendTypingIndicator}
-            onChange={(v) => update('sendTypingIndicator', v)}
+        </Field>
+        <Field label="Max tokens" htmlFor="agent-max-tokens">
+          <Input
+            id="agent-max-tokens"
+            type="number"
+            min="64"
+            max="8192"
+            value={form.maxTokens}
+            onChange={(e) => update('maxTokens', Number(e.target.value))}
           />
+        </Field>
+        <Field label="History token budget" htmlFor="agent-history-budget">
+          <Input
+            id="agent-history-budget"
+            type="number"
+            min="500"
+            value={form.historyTokenBudget}
+            onChange={(e) => update('historyTokenBudget', Number(e.target.value))}
+          />
+        </Field>
+        <Field label="Debounce (ms)" htmlFor="agent-debounce">
+          <Input
+            id="agent-debounce"
+            type="number"
+            min="0"
+            max="60000"
+            value={form.debounceMs}
+            onChange={(e) => update('debounceMs', Number(e.target.value))}
+          />
+        </Field>
+      </AgentSection>
+
+      <AgentSection title="Limites diários" description="Vazio = ilimitado.">
+        <Field label="Cap de tokens/dia" htmlFor="agent-daily-token-cap">
+          <Input
+            id="agent-daily-token-cap"
+            type="number"
+            min="1"
+            value={form.dailyTokenCap}
+            onChange={(e) => update('dailyTokenCap', e.target.value)}
+          />
+        </Field>
+        <Field label="Cap de mensagens/dia" htmlFor="agent-daily-message-cap">
+          <Input
+            id="agent-daily-message-cap"
+            type="number"
+            min="1"
+            value={form.dailyMessageCap}
+            onChange={(e) => update('dailyMessageCap', e.target.value)}
+          />
+        </Field>
+        <div className="md:col-span-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={validate}
+            loading={validating}
+          >
+            Testar conexão
+          </Button>
         </div>
-      </Section>
+      </AgentSection>
 
-      <div className="sticky bottom-0 -mx-6 flex gap-2 border-t border-zinc-200 bg-white px-6 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />} Salvar alterações
-        </button>
-        <button
-          onClick={validate}
-          disabled={validating}
-          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-        >
-          {validating && <Loader2 className="h-4 w-4 animate-spin" />} Testar conexão
-        </button>
-      </div>
-    </div>
-  );
-}
+      <AgentSection title="Comportamento" description="Estado operacional do agente.">
+        <ToggleField
+          label="Ativo"
+          hint="Se desligado, o agente não responde a nenhuma mensagem."
+          checked={form.isActive}
+          onChange={(v) => update('isActive', v)}
+        />
+        <ToggleField
+          label="Responder em grupos"
+          hint="Se ligado, o agente responde também em conversas de grupo."
+          checked={form.respondInGroups}
+          onChange={(v) => update('respondInGroups', v)}
+        />
+        <ToggleField
+          label="Mostrar 'digitando...'"
+          hint="Envia o indicador de digitação enquanto gera a resposta."
+          checked={form.sendTypingIndicator}
+          onChange={(v) => update('sendTypingIndicator', v)}
+        />
+      </AgentSection>
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <fieldset className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <legend className="px-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-        {title}
-      </legend>
-      <div className="mt-1 space-y-3">{children}</div>
-    </fieldset>
-  );
-}
-
-const inputCls =
-  'flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500';
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</label>
-      {children}
-      {hint && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{hint}</p>}
-    </div>
-  );
-}
-
-function Switch({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 accent-primary"
+      <AgentStickySaveBar
+        dirty={isDirty}
+        saving={saving}
+        onSave={save}
+        onDiscard={resetToAgent}
       />
-      {label}
-    </label>
+    </div>
+  );
+}
+
+function AgentSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {description ? <CardDescription>{description}</CardDescription> : null}
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">{children}</CardContent>
+    </Card>
+  );
+}
+
+function Field({
+  label,
+  htmlFor,
+  hint,
+  children,
+  full,
+}: {
+  label: string;
+  htmlFor?: string;
+  hint?: string;
+  children: React.ReactNode;
+  full?: boolean;
+}) {
+  return (
+    <div className={cn('flex flex-col gap-1.5', full && 'md:col-span-2')}>
+      <Label htmlFor={htmlFor}>{label}</Label>
+      {children}
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function ToggleField({
+  label,
+  hint,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  hint?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 md:col-span-2">
+      <div className="flex flex-col gap-0.5">
+        <Label>{label}</Label>
+        {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      </div>
+      <Switch checked={checked} onChange={onChange} disabled={disabled} />
+    </div>
   );
 }

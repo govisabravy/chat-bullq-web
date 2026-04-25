@@ -1,37 +1,83 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Trash2, Shield, ShieldCheck, User, Users } from 'lucide-react';
+import { MoreHorizontal, Search, Shield, Trash2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { membersService, type Member } from '@/features/settings/services/members.service';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Avatar } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Dropdown,
+  DropdownButton,
+  DropdownDivider,
+  DropdownItem,
+  DropdownMenu,
+} from '@/components/ui/dropdown';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const roleLabels: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  OWNER: { label: 'Proprietário', icon: ShieldCheck, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400' },
-  ADMIN: { label: 'Admin', icon: Shield, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' },
-  AGENT: { label: 'Agente', icon: User, color: 'text-zinc-600 bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-400' },
+const roleLabels: Record<Member['role'], string> = {
+  OWNER: 'Proprietário',
+  ADMIN: 'Admin',
+  AGENT: 'Agente',
 };
+
+const roleVariant = (role: Member['role']): 'info' | 'success' | 'default' =>
+  role === 'OWNER' ? 'info' : role === 'ADMIN' ? 'success' : 'default';
+
+const nextRole = (role: Member['role']): Member['role'] =>
+  role === 'ADMIN' ? 'AGENT' : 'ADMIN';
 
 export default function SettingsMembersPage() {
   const queryClient = useQueryClient();
+  const [q, setQ] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('AGENT');
+  const [inviteRole, setInviteRole] = useState<'ADMIN' | 'AGENT'>('AGENT');
   const [inviting, setInviting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
 
-  const { data: members, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['members'],
     queryFn: () => membersService.list(),
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['members'] });
 
+  const members = useMemo(() => {
+    const source = data ?? [];
+    const term = q.trim().toLowerCase();
+    if (!term) return source;
+    return source.filter(
+      (m) =>
+        m.user.name.toLowerCase().includes(term) ||
+        m.user.email.toLowerCase().includes(term),
+    );
+  }, [data, q]);
+
   const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
+    const email = inviteEmail.trim();
+    if (!email) return;
     setInviting(true);
     try {
-      await membersService.invite({ email: inviteEmail.trim(), role: inviteRole });
-      setInviteEmail('');
+      await membersService.invite({ email, role: inviteRole });
       toast.success('Membro convidado!');
+      setInviteEmail('');
+      setInviteRole('AGENT');
+      setInviteOpen(false);
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao convidar');
@@ -40,9 +86,14 @@ export default function SettingsMembersPage() {
     }
   };
 
-  const handleChangeRole = async (memberId: string, role: string) => {
+  const promoteRole = async (m: Member) => {
+    if (m.role === 'OWNER') {
+      toast.error('Não é possível alterar a role do proprietário');
+      return;
+    }
+    const target = nextRole(m.role);
     try {
-      await membersService.updateRole(memberId, role);
+      await membersService.updateRole(m.id, target);
       toast.success('Role atualizada');
       refresh();
     } catch (err) {
@@ -50,11 +101,12 @@ export default function SettingsMembersPage() {
     }
   };
 
-  const handleRemove = async (memberId: string, name: string) => {
-    if (!confirm(`Remover ${name} da organização?`)) return;
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await membersService.remove(memberId);
+      await membersService.remove(deleteTarget.id);
       toast.success('Membro removido');
+      setDeleteTarget(null);
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao remover');
@@ -62,126 +114,175 @@ export default function SettingsMembersPage() {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Membros</h2>
-          <p className="mt-0.5 text-sm text-zinc-500">Gerencie os membros da sua organização</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Membros</h1>
+          <p className="text-sm text-muted-foreground">Quem tem acesso à organização.</p>
         </div>
-      </div>
-
-      <div className="mt-6 flex items-end gap-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
-        <div className="flex-1">
-          <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Email do membro</label>
-          <input
-            type="email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
-            placeholder="email@exemplo.com"
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Role</label>
-          <select
-            value={inviteRole}
-            onChange={(e) => setInviteRole(e.target.value)}
-            className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-          >
-            <option value="AGENT">Agente</option>
-            <option value="ADMIN">Admin</option>
-          </select>
-        </div>
-        <button
-          onClick={handleInvite}
-          disabled={!inviteEmail.trim() || inviting}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
+        <Button variant="primary" onClick={() => setInviteOpen(true)}>
           <UserPlus className="h-4 w-4" /> Convidar
-        </button>
+        </Button>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Membro</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Role</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Entrou em</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-zinc-500">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <tr key={i} className="border-b border-zinc-50 dark:border-zinc-800">
-                  <td className="px-4 py-3"><div className="h-4 w-36 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" /></td>
-                  <td className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" /></td>
-                  <td className="px-4 py-3"><div className="h-4 w-24 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" /></td>
-                  <td className="px-4 py-3" />
-                </tr>
-              ))
-            ) : !members?.length ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-12 text-center">
-                  <Users className="mx-auto h-10 w-10 text-zinc-200 dark:text-zinc-700" />
-                  <p className="mt-3 text-sm text-zinc-500">Nenhum membro encontrado</p>
-                </td>
-              </tr>
-            ) : (
-              members.map((m) => {
-                const roleMeta = roleLabels[m.role] || roleLabels.AGENT;
-                const RoleIcon = roleMeta.icon;
-                return (
-                  <tr key={m.id} className="border-b border-zinc-50 dark:border-zinc-800">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-xs font-medium dark:bg-zinc-800">
-                          {m.user.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{m.user.name}</p>
-                          <p className="text-[11px] text-zinc-400">{m.user.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {m.role === 'OWNER' ? (
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${roleMeta.color}`}>
-                          <RoleIcon className="h-3 w-3" /> {roleMeta.label}
-                        </span>
-                      ) : (
-                        <select
-                          value={m.role}
-                          onChange={(e) => handleChangeRole(m.id, e.target.value)}
-                          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                        >
-                          <option value="ADMIN">Admin</option>
-                          <option value="AGENT">Agente</option>
-                        </select>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-zinc-500">
-                      {new Date(m.joinedAt).toLocaleDateString('pt-BR')}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {m.role !== 'OWNER' && (
-                        <button
-                          onClick={() => handleRemove(m.id, m.user.name)}
-                          className="rounded p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+      <div className="flex items-center gap-3">
+        <Input
+          iconLeft={<Search className="h-4 w-4" />}
+          placeholder="Buscar por nome ou email"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="max-w-sm"
+        />
       </div>
+
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="sticky top-0 z-10 grid grid-cols-[1fr_1fr_100px_60px] gap-3 border-b border-border bg-muted/30 px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span>Nome</span>
+          <span>Email</span>
+          <span>Role</span>
+          <span></span>
+        </div>
+
+        {isLoading ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-[1fr_1fr_100px_60px] items-center gap-3 border-b border-border/50 px-4 py-3 last:border-b-0"
+            >
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-7 w-7 rounded-full" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-5 w-16" />
+              <div className="flex justify-end">
+                <Skeleton className="h-8 w-8" />
+              </div>
+            </div>
+          ))
+        ) : members.length === 0 ? (
+          <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+            {q.trim() ? 'Nenhum membro encontrado.' : 'Nenhum membro ainda.'}
+          </div>
+        ) : (
+          members.map((m) => (
+            <div
+              key={m.id}
+              className="grid grid-cols-[1fr_1fr_100px_60px] items-center gap-3 border-b border-border/50 px-4 py-3 text-sm transition-smooth last:border-b-0 hover:bg-accent/40"
+            >
+              <div className="flex items-center gap-3">
+                <Avatar src={m.user.avatarUrl} alt={m.user.name} size="sm" />
+                <span className="truncate font-medium text-foreground">{m.user.name}</span>
+              </div>
+              <span className="truncate text-muted-foreground">{m.user.email}</span>
+              <Badge variant={roleVariant(m.role)}>{roleLabels[m.role]}</Badge>
+              <div className="flex justify-end">
+                <Dropdown>
+                  <DropdownButton className="rounded-md p-2 text-muted-foreground transition-smooth hover:bg-accent hover:text-foreground">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </DropdownButton>
+                  <DropdownMenu anchor="bottom end">
+                    <DropdownItem onClick={() => promoteRole(m)}>
+                      <Shield className="h-4 w-4" />
+                      Alterar role
+                    </DropdownItem>
+                    <DropdownDivider />
+                    <DropdownItem
+                      onClick={() => setDeleteTarget(m)}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remover
+                    </DropdownItem>
+                  </DropdownMenu>
+                </Dropdown>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <AlertDialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Convidar membro</AlertDialogTitle>
+            <AlertDialogDescription>
+              O convite será enviado por email com instruções de acesso.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Separator className="my-4" />
+          <div className="space-y-3">
+            <Input
+              type="email"
+              placeholder="email@exemplo.com"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant={inviteRole === 'AGENT' ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setInviteRole('AGENT')}
+              >
+                Agente
+              </Button>
+              <Button
+                type="button"
+                variant={inviteRole === 'ADMIN' ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setInviteRole('ADMIN')}
+              >
+                Admin
+              </Button>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleInvite();
+              }}
+              disabled={!inviteEmail.trim() || inviting}
+            >
+              <UserPlus className="h-4 w-4" />
+              Convidar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(v) => !v && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover membro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget ? (
+                <>
+                  <span className="font-medium text-foreground">
+                    {deleteTarget.user.name}
+                  </span>{' '}
+                  perderá acesso à organização. Essa ação não pode ser desfeita.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 focus:ring-destructive"
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
