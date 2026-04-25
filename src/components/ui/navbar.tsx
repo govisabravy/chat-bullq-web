@@ -14,7 +14,7 @@ export function NavbarSpacer() {
   return <div aria-hidden className="flex-1" />;
 }
 
-export function NavbarSection({ children }: { children: ReactNode }) {
+export function NavbarSection({ children }: { children?: ReactNode }) {
   return <div className="flex items-center gap-3">{children}</div>;
 }
 
