@@ -32,6 +32,7 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const meta = channelTypeMap[channel.type] || { label: channel.type, icon: MessageSquare, color: 'bg-gray-500' };
   const Icon = meta.icon;
+  const isZappfy = channel.type === 'WHATSAPP_ZAPPFY';
 
   const handleTest = async () => {
     setIsTesting(true);
@@ -74,7 +75,16 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
   return (
     <div className="relative flex items-start gap-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
       <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${meta.color}`}>
-        <Icon className="h-6 w-6 text-white" />
+        {isZappfy ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="https://www.google.com/s2/favicons?domain=zappfy.io&sz=64"
+            alt="Zappfy"
+            className="h-6 w-6"
+          />
+        ) : (
+          <Icon className="h-6 w-6 text-white" />
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

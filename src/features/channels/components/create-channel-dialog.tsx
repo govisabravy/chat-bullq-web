@@ -8,11 +8,14 @@ import { toast } from 'sonner';
 import { Loader2, X, MessageSquare, Smartphone, Instagram, Copy, Check, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { channelsService, type ChannelType, type TestConnectionResult } from '../services/channels.service';
 
-const channelTypes: { value: ChannelType; label: string; icon: React.ElementType; color: string; description: string }[] = [
+const ZAPPFY_API_URL = 'https://api.zappfy.io';
+const ZAPPFY_FAVICON = 'https://www.google.com/s2/favicons?domain=zappfy.io&sz=64';
+
+const channelTypes: { value: ChannelType; label: string; icon?: React.ElementType; iconUrl?: string; color: string; description: string }[] = [
   {
     value: 'WHATSAPP_ZAPPFY',
     label: 'WhatsApp (Zappfy)',
-    icon: MessageSquare,
+    iconUrl: ZAPPFY_FAVICON,
     color: 'bg-green-500',
     description: 'Conecte via Zappfy/Uazapi — sem restrição de 24h',
   },
@@ -65,7 +68,7 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
 
   const zappfyForm = useForm<ZappfyFormData>({
     resolver: zodResolver(zappfySchema),
-    defaultValues: { name: '', url: '', token: '', webhookSecret: '' },
+    defaultValues: { name: '', url: ZAPPFY_API_URL, token: '', webhookSecret: '' },
   });
 
   const zappfyUrl = zappfyForm.watch('url');
@@ -174,7 +177,11 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
       <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
       <div className="relative z-50 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            {step === 'config' && selectedType === 'WHATSAPP_ZAPPFY' && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={ZAPPFY_FAVICON} alt="Zappfy" className="h-5 w-5" />
+            )}
             {step === 'type' ? 'Novo Canal' : titleMap[selectedType || '']}
           </h2>
           <button onClick={handleClose} className="rounded-md p-1 text-zinc-400 hover:text-zinc-600">
@@ -191,7 +198,12 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
                 className="flex items-center gap-4 rounded-xl border border-zinc-200 p-4 text-left transition-all hover:border-primary hover:shadow-sm dark:border-zinc-700 dark:hover:border-primary"
               >
                 <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${ct.color}`}>
-                  <ct.icon className="h-5 w-5 text-white" />
+                  {ct.iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={ct.iconUrl} alt={ct.label} className="h-5 w-5" />
+                  ) : ct.icon ? (
+                    <ct.icon className="h-5 w-5 text-white" />
+                  ) : null}
                 </div>
                 <div>
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{ct.label}</p>
@@ -203,7 +215,13 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
         ) : selectedType === 'WHATSAPP_ZAPPFY' ? (
           <form onSubmit={zappfyForm.handleSubmit(onSubmitZappfy)} className="mt-6 space-y-4">
             <Field label="Nome do canal" placeholder="Ex: WhatsApp Principal" error={zappfyForm.formState.errors.name?.message} {...zappfyForm.register('name')} />
-            <Field label="URL" placeholder="https://api.zappfy.io" error={zappfyForm.formState.errors.url?.message} {...zappfyForm.register('url')} />
+            <Field
+              label="URL"
+              readOnly
+              value={ZAPPFY_API_URL}
+              error={zappfyForm.formState.errors.url?.message}
+              {...zappfyForm.register('url')}
+            />
             <Field label="Token" type="password" placeholder="••••••••" error={zappfyForm.formState.errors.token?.message} {...zappfyForm.register('token')} />
             <Field label="Webhook Secret" placeholder="Opcional" optional {...zappfyForm.register('webhookSecret')} />
             <div className="flex items-center gap-2">

@@ -43,6 +43,16 @@ const typeLabels: Record<ChannelType, string> = {
 function IconFor({ type }: { type: ChannelType }) {
   if (type === 'INSTAGRAM') return <Instagram className="h-4 w-4" />;
   if (type === 'WHATSAPP_OFFICIAL') return <Smartphone className="h-4 w-4" />;
+  if (type === 'WHATSAPP_ZAPPFY') {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src="https://www.google.com/s2/favicons?domain=zappfy.io&sz=64"
+        alt="Zappfy"
+        className="h-4 w-4"
+      />
+    );
+  }
   return <MessageSquare className="h-4 w-4" />;
 }
 
