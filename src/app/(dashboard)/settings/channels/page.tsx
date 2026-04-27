@@ -33,6 +33,7 @@ import {
   type ChannelType,
 } from '@/features/channels/services/channels.service';
 import { CreateChannelDialog } from '@/features/channels/components/create-channel-dialog';
+import { EditChannelDialog } from '@/features/channels/components/edit-channel-dialog';
 
 const typeLabels: Record<ChannelType, string> = {
   WHATSAPP_OFFICIAL: 'WhatsApp Official',
@@ -59,6 +60,7 @@ function IconFor({ type }: { type: ChannelType }) {
 export default function SettingsChannelsPage() {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Channel | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Channel | null>(null);
 
   const { data: channels, isLoading } = useQuery({
@@ -80,8 +82,8 @@ export default function SettingsChannelsPage() {
     onSettled: () => setDeleteTarget(null),
   });
 
-  const openSettings = (_c: Channel) => {
-    toast.info('Configuração em breve');
+  const openSettings = (c: Channel) => {
+    setEditTarget(c);
   };
 
   return (
@@ -186,6 +188,13 @@ export default function SettingsChannelsPage() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={refresh}
+      />
+
+      <EditChannelDialog
+        channel={editTarget}
+        open={editTarget !== null}
+        onClose={() => setEditTarget(null)}
+        onSaved={refresh}
       />
 
       <AlertDialog

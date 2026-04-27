@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Radio } from 'lucide-react';
-import { channelsService } from '../services/channels.service';
+import { channelsService, type Channel } from '../services/channels.service';
 import { ChannelCard } from './channel-card';
 import { CreateChannelDialog } from './create-channel-dialog';
+import { EditChannelDialog } from './edit-channel-dialog';
 
 export function ChannelsList() {
   const [showCreate, setShowCreate] = useState(false);
+  const [editTarget, setEditTarget] = useState<Channel | null>(null);
   const queryClient = useQueryClient();
 
   const { data: channels, isLoading } = useQuery({
@@ -45,7 +47,7 @@ export function ChannelsList() {
           ))
         ) : channels && channels.length > 0 ? (
           channels.map((ch) => (
-            <ChannelCard key={ch.id} channel={ch} onUpdate={refresh} />
+            <ChannelCard key={ch.id} channel={ch} onUpdate={refresh} onEdit={setEditTarget} />
           ))
         ) : (
           <div className="col-span-full flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-200 py-16 dark:border-zinc-800">
@@ -71,6 +73,13 @@ export function ChannelsList() {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreated={refresh}
+      />
+
+      <EditChannelDialog
+        channel={editTarget}
+        open={editTarget !== null}
+        onClose={() => setEditTarget(null)}
+        onSaved={refresh}
       />
     </div>
   );

@@ -197,14 +197,14 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
                 onClick={() => handleTypeSelect(ct.value)}
                 className="flex items-center gap-4 rounded-xl border border-zinc-200 p-4 text-left transition-all hover:border-primary hover:shadow-sm dark:border-zinc-700 dark:hover:border-primary"
               >
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${ct.color}`}>
-                  {ct.iconUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={ct.iconUrl} alt={ct.label} className="h-5 w-5" />
-                  ) : ct.icon ? (
+                {ct.iconUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={ct.iconUrl} alt={ct.label} className="h-10 w-10" />
+                ) : ct.icon ? (
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${ct.color}`}>
                     <ct.icon className="h-5 w-5 text-white" />
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
                 <div>
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{ct.label}</p>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">{ct.description}</p>

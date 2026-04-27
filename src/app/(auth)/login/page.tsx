@@ -58,7 +58,7 @@ export default function LoginPage() {
   return (
     <AuthCard
       title="Entrar"
-      description="Acesse o painel do BullQ"
+      description="Acesse o painel do Go Visa"
       footer={
         <>
           Não tem conta?{' '}

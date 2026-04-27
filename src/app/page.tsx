@@ -29,7 +29,7 @@ export default function Landing() {
           Atendimento que escala sem perder a voz humana.
         </h1>
         <p className="max-w-lg text-base text-muted-foreground md:text-lg">
-          BullQ combina agentes de IA com handoff pra humano numa plataforma só.
+          Go Visa combina agentes de IA com handoff pra humano numa plataforma só.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Link href="/register">

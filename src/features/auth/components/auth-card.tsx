@@ -16,8 +16,8 @@ export function AuthCard({ title, description, footer, children }: AuthCardProps
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <motion.div variants={fadeInUp} initial="hidden" animate="visible" className="w-full max-w-sm">
         <Link href="/" className="mb-6 flex items-center justify-center gap-2 text-foreground">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold">B</div>
-          <span className="text-lg font-semibold tracking-tight">BullQ</span>
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold">G</div>
+          <span className="text-lg font-semibold tracking-tight">Go Visa</span>
         </Link>
         <Card>
           <CardHeader className="text-center">

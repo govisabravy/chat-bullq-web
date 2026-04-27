@@ -6,8 +6,11 @@ import { Providers } from '@/components/providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Chat BullQ',
-  description: 'Omnichannel customer service platform',
+  title: {
+    default: 'Go Visa',
+    template: '%s | Go Visa',
+  },
+  description: 'Plataforma de atendimento Go Visa',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
