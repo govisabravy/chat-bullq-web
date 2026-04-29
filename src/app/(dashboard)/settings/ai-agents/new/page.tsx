@@ -48,6 +48,10 @@ export default function NewAgentPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [embeddingsProvider, setEmbeddingsProvider] = useState<'GEMINI' | 'OPENAI'>('GEMINI');
   const [embeddingsApiKey, setEmbeddingsApiKey] = useState('');
+  const [embeddingsModel, setEmbeddingsModel] = useState('');
+  const [embeddingsModels, setEmbeddingsModels] = useState<string[]>([]);
+  const [loadingEmbeddingsModels, setLoadingEmbeddingsModels] = useState(false);
+  const [embeddingsModelsError, setEmbeddingsModelsError] = useState<string | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -76,6 +80,34 @@ export default function NewAgentPage() {
     setModelsError(null);
   }, [generationProvider]);
 
+  useEffect(() => {
+    setEmbeddingsModels([]);
+    setEmbeddingsModel('');
+    setEmbeddingsModelsError(null);
+  }, [embeddingsProvider]);
+
+  const fetchEmbeddingsModels = async () => {
+    const key = embeddingsApiKey.trim() || (embeddingsProvider === generationProvider ? apiKey.trim() : '');
+    if (!key) {
+      setEmbeddingsModelsError('Informe API key de embeddings ou use mesmo provider da geração');
+      return;
+    }
+    setLoadingEmbeddingsModels(true);
+    setEmbeddingsModelsError(null);
+    try {
+      const list = await aiAgentsService.listModels(embeddingsProvider, key, 'embeddings');
+      setEmbeddingsModels(list);
+      if (list.length > 0 && !list.includes(embeddingsModel)) {
+        setEmbeddingsModel(list[0]);
+      }
+    } catch (err) {
+      setEmbeddingsModelsError(err instanceof Error ? err.message : 'Erro ao listar modelos');
+      setEmbeddingsModels([]);
+    } finally {
+      setLoadingEmbeddingsModels(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !systemPrompt || !apiKey || !generationModel) {
@@ -94,6 +126,7 @@ export default function NewAgentPage() {
         apiKey,
         embeddingsProvider,
         embeddingsApiKey: embeddingsApiKey || undefined,
+        embeddingsModel: embeddingsModel || undefined,
       } as any);
       toast.success('Agente criado');
       router.push(`/settings/ai-agents/${created.id}`);
@@ -236,12 +269,51 @@ export default function NewAgentPage() {
               label="API key embeddings"
               hint="Opcional. Vazio reutiliza a key de geração se o provider bater, ou cai no env."
             >
-              <Input
-                type="password"
-                value={embeddingsApiKey}
-                onChange={(e) => setEmbeddingsApiKey(e.target.value)}
-                placeholder="••••••••"
-              />
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  value={embeddingsApiKey}
+                  onChange={(e) => setEmbeddingsApiKey(e.target.value)}
+                  onBlur={() => fetchEmbeddingsModels()}
+                  placeholder="••••••••"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  type="button"
+                  onClick={() => fetchEmbeddingsModels()}
+                  disabled={loadingEmbeddingsModels}
+                  title="Buscar modelos de embeddings"
+                >
+                  {loadingEmbeddingsModels ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </Field>
+            <Field
+              label="Modelo de embeddings"
+              hint={
+                embeddingsModelsError ??
+                (embeddingsModels.length === 0
+                  ? 'Cole a API key de embeddings (ou use a de geração) e busque os modelos'
+                  : `${embeddingsModels.length} modelos disponíveis`)
+              }
+            >
+              <Select
+                value={embeddingsModel}
+                onChange={setEmbeddingsModel}
+                disabled={embeddingsModels.length === 0}
+                placeholder="— carregue os modelos —"
+              >
+                {embeddingsModels.map((m) => (
+                  <SelectOption key={m} value={m}>
+                    {m}
+                  </SelectOption>
+                ))}
+              </Select>
             </Field>
           </CardContent>
         </Card>
