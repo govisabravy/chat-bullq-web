@@ -40,6 +40,7 @@ export interface AiAgent {
   handoffMessage?: string | null;
   pauseBehavior?: 'MANUAL' | 'AUTO_RESUME';
   autoResumeMinutes?: number;
+  activationMode?: 'ALL_CONVERSATIONS' | 'PER_CONVERSATION';
   handoffTargets?: { targetAgentId: string }[];
   createdAt: string;
   updatedAt: string;

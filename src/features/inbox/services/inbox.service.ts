@@ -162,4 +162,15 @@ export const inboxService = {
     const { data } = await api.post<{ data: Conversation }>(`/conversations/${conversationId}/resume-ai`);
     return data.data;
   },
+  async activateAi(conversationId: string, agentId?: string): Promise<Conversation> {
+    const { data } = await api.post<{ data: Conversation }>(
+      `/conversations/${conversationId}/activate-ai`,
+      agentId ? { agentId } : {},
+    );
+    return data.data;
+  },
+  async deactivateAi(conversationId: string): Promise<Conversation> {
+    const { data } = await api.post<{ data: Conversation }>(`/conversations/${conversationId}/deactivate-ai`);
+    return data.data;
+  },
 };

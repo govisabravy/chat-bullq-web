@@ -11,6 +11,8 @@ import {
   Instagram,
   PauseCircle,
   PlayCircle,
+  Bot,
+  BotOff,
 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -80,6 +82,26 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
     onError: (err: any) => toast.error(err?.message ?? 'Erro ao retomar IA'),
   });
 
+  const activateMutation = useMutation({
+    mutationFn: () => inboxService.activateAi(conversation.id),
+    onSuccess: () => {
+      toast.success('IA ativada nesta conversa');
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      onUpdate();
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Erro ao ativar IA'),
+  });
+
+  const deactivateMutation = useMutation({
+    mutationFn: () => inboxService.deactivateAi(conversation.id),
+    onSuccess: () => {
+      toast.success('IA desativada nesta conversa');
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      onUpdate();
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Erro ao desativar IA'),
+  });
+
   const displayName =
     conversation.contact.name || conversation.contact.phone || 'Desconhecido';
 
@@ -112,6 +134,30 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
       </div>
 
       <div className="flex items-center gap-1.5 shrink-0">
+        {!conversation.activeAiAgentId && conversation.status !== 'CLOSED' && (
+          <Tooltip content="Ativar IA nesta conversa" side="bottom">
+            <Button
+              variant="primary"
+              size="icon"
+              onClick={() => activateMutation.mutate()}
+              loading={activateMutation.isPending}
+            >
+              <Bot />
+            </Button>
+          </Tooltip>
+        )}
+        {conversation.activeAiAgentId && (
+          <Tooltip content="Desativar IA nesta conversa" side="bottom">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => deactivateMutation.mutate()}
+              loading={deactivateMutation.isPending}
+            >
+              <BotOff />
+            </Button>
+          </Tooltip>
+        )}
         {conversation.activeAiAgentId && !conversation.aiPaused && (
           <Tooltip content="Pausar IA" side="bottom">
             <Button

@@ -48,6 +48,7 @@ export default function NewAgentPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [embeddingsProvider, setEmbeddingsProvider] = useState<'GEMINI' | 'OPENAI'>('GEMINI');
   const [embeddingsApiKey, setEmbeddingsApiKey] = useState('');
+  const [activationMode, setActivationMode] = useState<'ALL_CONVERSATIONS' | 'PER_CONVERSATION'>('ALL_CONVERSATIONS');
   const [embeddingsModel, setEmbeddingsModel] = useState('');
   const [embeddingsModels, setEmbeddingsModels] = useState<string[]>([]);
   const [loadingEmbeddingsModels, setLoadingEmbeddingsModels] = useState(false);
@@ -127,6 +128,7 @@ export default function NewAgentPage() {
         embeddingsProvider,
         embeddingsApiKey: embeddingsApiKey || undefined,
         embeddingsModel: embeddingsModel || undefined,
+        activationMode,
       } as any);
       toast.success('Agente criado');
       router.push(`/settings/ai-agents/${created.id}`);
@@ -249,6 +251,31 @@ export default function NewAgentPage() {
                       {m}
                     </SelectOption>
                   ))}
+              </Select>
+            </Field>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Ativação</CardTitle>
+            <CardDescription>Define quando a IA entra em ação nas conversas.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Field
+              label="Modo de ativação"
+              hint={
+                activationMode === 'ALL_CONVERSATIONS'
+                  ? 'IA responde automaticamente em toda nova conversa do(s) canal(is) atribuído(s).'
+                  : 'IA fica inativa por padrão. Operador ativa manualmente em cada conversa.'
+              }
+            >
+              <Select
+                value={activationMode}
+                onChange={(v) => setActivationMode(v as 'ALL_CONVERSATIONS' | 'PER_CONVERSATION')}
+              >
+                <SelectOption value="ALL_CONVERSATIONS">Em todas conversas (padrão)</SelectOption>
+                <SelectOption value="PER_CONVERSATION">Apenas quando ativada manualmente</SelectOption>
               </Select>
             </Field>
           </CardContent>

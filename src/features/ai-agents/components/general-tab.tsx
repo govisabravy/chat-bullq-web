@@ -48,6 +48,7 @@ type FormState = {
   handoffTargetIds: string[];
   pauseBehavior: 'MANUAL' | 'AUTO_RESUME';
   autoResumeMinutes: number;
+  activationMode: 'ALL_CONVERSATIONS' | 'PER_CONVERSATION';
 };
 
 function buildInitialForm(agent: AiAgent): FormState {
@@ -77,6 +78,7 @@ function buildInitialForm(agent: AiAgent): FormState {
       ((agent as any).handoffTargets?.map((h: any) => h.targetAgentId) ?? []) as string[],
     pauseBehavior: agent.pauseBehavior ?? 'MANUAL',
     autoResumeMinutes: agent.autoResumeMinutes ?? 15,
+    activationMode: agent.activationMode ?? 'ALL_CONVERSATIONS',
   };
 }
 
@@ -430,6 +432,24 @@ export function GeneralTab({ agent }: { agent: AiAgent }) {
         title="Pause / Handoff"
         description="Comportamento quando o atendente assume ou transfere a conversa."
       >
+        <Field
+          label="Modo de ativação"
+          hint={
+            form.activationMode === 'ALL_CONVERSATIONS'
+              ? 'IA responde automaticamente em toda nova conversa do(s) canal(is) atribuído(s).'
+              : 'IA fica inativa por padrão. Operador ativa manualmente em cada conversa.'
+          }
+        >
+          <Select
+            value={form.activationMode}
+            onChange={(v) =>
+              update('activationMode', v as 'ALL_CONVERSATIONS' | 'PER_CONVERSATION')
+            }
+          >
+            <SelectOption value="ALL_CONVERSATIONS">Em todas conversas (padrão)</SelectOption>
+            <SelectOption value="PER_CONVERSATION">Apenas quando ativada manualmente</SelectOption>
+          </Select>
+        </Field>
         <Field
           label="Comportamento de pausa"
           hint="Manual: só o atendente retoma. Auto: retoma após X minutos sem resposta do atendente."
