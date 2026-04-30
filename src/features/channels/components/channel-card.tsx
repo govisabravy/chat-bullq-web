@@ -12,6 +12,9 @@ import {
   Power,
   PowerOff,
   Loader2,
+  Copy,
+  RotateCw,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Channel } from '../services/channels.service';
@@ -31,10 +34,42 @@ interface ChannelCardProps {
 
 export function ChannelCard({ channel, onUpdate, onEdit }: ChannelCardProps) {
   const [isTesting, setIsTesting] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const meta = channelTypeMap[channel.type] || { label: channel.type, icon: MessageSquare, color: 'bg-gray-500' };
   const Icon = meta.icon;
   const isZappfy = channel.type === 'WHATSAPP_ZAPPFY';
+
+  const apiBase =
+    (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    '';
+  const webhookUrl = channel.webhookToken
+    ? `${apiBase.replace(/\/$/, '')}/webhooks/${channel.type}/${channel.webhookToken}`
+    : '';
+
+  const handleCopy = async () => {
+    if (!webhookUrl) return;
+    await navigator.clipboard.writeText(webhookUrl);
+    setCopied(true);
+    toast.success('URL copiada');
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleRotate = async () => {
+    if (!confirm('Rotacionar o token vai invalidar a URL atual no provider. Continuar?')) return;
+    setIsRotating(true);
+    try {
+      await channelsService.rotateWebhookToken(channel.id);
+      toast.success('Token rotacionado — atualize a URL no provider');
+      onUpdate();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao rotacionar token');
+    } finally {
+      setIsRotating(false);
+    }
+  };
 
   const handleTest = async () => {
     setIsTesting(true);
@@ -104,6 +139,33 @@ export function ChannelCard({ channel, onUpdate, onEdit }: ChannelCardProps) {
           </span>
         </div>
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{meta.label}</p>
+        {webhookUrl && (
+          <div className="mt-2 rounded-md border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-800 dark:bg-zinc-950/50">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Webhook URL
+            </div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <code className="flex-1 truncate rounded bg-white px-1.5 py-1 font-mono text-[11px] text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                {webhookUrl}
+              </code>
+              <button
+                onClick={handleCopy}
+                className="rounded p-1 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                title="Copiar URL"
+              >
+                {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+              </button>
+              <button
+                onClick={handleRotate}
+                disabled={isRotating}
+                className="rounded p-1 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                title="Rotacionar token"
+              >
+                {isRotating ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
+              </button>
+            </div>
+          </div>
+        )}
         <div className="mt-3 flex items-center gap-2">
           <button
             onClick={handleTest}

@@ -21,6 +21,7 @@ import {
   PopoverPanel,
 } from '@headlessui/react';
 import { inboxService, type Conversation } from '../services/inbox.service';
+import { channelsService } from '@/features/channels/services/channels.service';
 import { Input } from '@/components/ui/input';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -58,8 +59,15 @@ interface ConversationListProps {
 
 export function ConversationList({ activeId, onSelect, onPrefetch }: ConversationListProps) {
   const [statusFilters, setStatusFilters] = useState<Set<string>>(new Set());
+  const [channelFilter, setChannelFilter] = useState<string>('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  const { data: channels = [] } = useQuery({
+    queryKey: ['channels-filter'],
+    queryFn: () => channelsService.list(),
+    staleTime: 60_000,
+  });
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -90,11 +98,12 @@ export function ConversationList({ activeId, onSelect, onPrefetch }: Conversatio
   }, []);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['conversations', statusFilterKey, debouncedSearch],
+    queryKey: ['conversations', statusFilterKey, debouncedSearch, channelFilter],
     queryFn: () => {
       const params: Record<string, string> = { limit: '50' };
       if (statusFilters.size > 0) params.status = Array.from(statusFilters).join(',');
       if (debouncedSearch) params.search = debouncedSearch;
+      if (channelFilter) params.channelId = channelFilter;
       return inboxService.getConversations(params);
     },
     refetchInterval: 10000,
@@ -131,6 +140,25 @@ export function ConversationList({ activeId, onSelect, onPrefetch }: Conversatio
 
   return (
     <div className="flex h-full min-h-0 w-80 flex-col border-r border-border bg-card">
+      {channels.length > 0 && (
+        <div className="px-3 pt-3">
+          <select
+            value={channelFilter}
+            onChange={(e) => setChannelFilter(e.target.value)}
+            className="h-9 w-full rounded-md border border-border bg-background px-2 text-[13px] outline-none transition-smooth focus:border-primary"
+          >
+            <option value="">Todas instâncias</option>
+            {channels
+              .filter((c) => c.isActive)
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} · {c.type}
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
         <div className="relative flex-1">
           <Input

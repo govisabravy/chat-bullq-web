@@ -9,6 +9,7 @@ export interface Channel {
   name: string;
   config: Record<string, any>;
   webhookSecret: string | null;
+  webhookToken: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -67,6 +68,11 @@ export const channelsService = {
 
   async testConfig(type: ChannelType, config: Record<string, any>): Promise<TestConnectionResult> {
     const { data } = await api.post<{ data: TestConnectionResult }>(`/channels/test`, { type, config });
+    return data.data;
+  },
+
+  async rotateWebhookToken(id: string): Promise<Channel> {
+    const { data } = await api.post<{ data: Channel }>(`/channels/${id}/rotate-webhook-token`);
     return data.data;
   },
 };

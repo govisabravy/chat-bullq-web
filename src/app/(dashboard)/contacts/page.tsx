@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Search, Users, MessageSquare, Instagram, Smartphone, ExternalLink } from 'lucide-react';
 import { contactsService, type Contact } from '@/features/contacts/services/contacts.service';
+import { channelsService } from '@/features/channels/services/channels.service';
 
 const channelIcons: Record<string, React.ElementType> = {
   WHATSAPP_ZAPPFY: MessageSquare,
@@ -14,11 +15,23 @@ const channelIcons: Record<string, React.ElementType> = {
 
 export default function ContactsPage() {
   const [search, setSearch] = useState('');
+  const [channelFilter, setChannelFilter] = useState('');
   const [page, setPage] = useState(1);
 
+  const { data: channels = [] } = useQuery({
+    queryKey: ['channels-filter'],
+    queryFn: () => channelsService.list(),
+    staleTime: 60_000,
+  });
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['contacts', search, page],
-    queryFn: () => contactsService.list({ search, page: String(page), limit: '20' }),
+    queryKey: ['contacts', search, page, channelFilter],
+    queryFn: () => {
+      const params: Record<string, string> = { page: String(page), limit: '20' };
+      if (search) params.search = search;
+      if (channelFilter) params.channelId = channelFilter;
+      return contactsService.list(params);
+    },
     retry: 1,
   });
 
@@ -36,15 +49,33 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      <div className="mt-6 relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-        <input
-          type="text"
-          placeholder="Buscar por nome, telefone ou email..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="w-full rounded-lg border border-zinc-200 bg-white py-2.5 pl-10 pr-4 text-sm placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-        />
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <input
+            type="text"
+            placeholder="Buscar por nome, telefone ou email..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="w-full rounded-lg border border-zinc-200 bg-white py-2.5 pl-10 pr-4 text-sm placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          />
+        </div>
+        {channels.length > 0 && (
+          <select
+            value={channelFilter}
+            onChange={(e) => { setChannelFilter(e.target.value); setPage(1); }}
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 sm:w-56"
+          >
+            <option value="">Todas instâncias</option>
+            {channels
+              .filter((c) => c.isActive)
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} · {c.type}
+                </option>
+              ))}
+          </select>
+        )}
       </div>
 
       <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">

@@ -117,8 +117,12 @@ export function EditChannelDialog({ channel, open, onClose, onSaved }: EditChann
       ? `${window.location.origin.replace(':3000', ':3001')}/api/v1`
       : 'http://localhost:3001/api/v1';
 
+  const webhookSuffix = channel?.webhookToken ? `/${channel.webhookToken}` : '';
+  const buildWebhookUrl = (channelType: string) =>
+    `${apiBaseUrl}/webhooks/${channelType}${webhookSuffix}`;
+
   const handleCopyWebhook = (channelType: string) => {
-    navigator.clipboard.writeText(`${apiBaseUrl}/webhooks/${channelType}`);
+    navigator.clipboard.writeText(buildWebhookUrl(channelType));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -270,7 +274,7 @@ export function EditChannelDialog({ channel, open, onClose, onSaved }: EditChann
               )}
             </div>
             <WebhookUrl
-              url={`${apiBaseUrl}/webhooks/WHATSAPP_ZAPPFY`}
+              url={buildWebhookUrl('WHATSAPP_ZAPPFY')}
               copied={copied}
               onCopy={() => handleCopyWebhook('WHATSAPP_ZAPPFY')}
             />
@@ -284,7 +288,7 @@ export function EditChannelDialog({ channel, open, onClose, onSaved }: EditChann
             <Field label="Business Account ID" optional {...waForm.register('businessAccountId')} />
             <Field label="Webhook Verify Token" optional {...waForm.register('webhookSecret')} />
             <WebhookUrl
-              url={`${apiBaseUrl}/webhooks/WHATSAPP_OFFICIAL`}
+              url={buildWebhookUrl('WHATSAPP_OFFICIAL')}
               copied={copied}
               onCopy={() => handleCopyWebhook('WHATSAPP_OFFICIAL')}
             />
@@ -298,7 +302,7 @@ export function EditChannelDialog({ channel, open, onClose, onSaved }: EditChann
             <Field label="Instagram User ID" optional {...igForm.register('igUserId')} />
             <Field label="Webhook Verify Token" optional {...igForm.register('webhookSecret')} />
             <WebhookUrl
-              url={`${apiBaseUrl}/webhooks/INSTAGRAM`}
+              url={buildWebhookUrl('INSTAGRAM')}
               copied={copied}
               onCopy={() => handleCopyWebhook('INSTAGRAM')}
             />

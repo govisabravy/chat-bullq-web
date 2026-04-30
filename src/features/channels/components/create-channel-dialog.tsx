@@ -246,7 +246,7 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
               )}
             </div>
             <ZappfyTestResult result={testResult} />
-            <WebhookUrl url={`${apiBaseUrl}/webhooks/WHATSAPP_ZAPPFY`} copied={copied} onCopy={() => handleCopyWebhook('WHATSAPP_ZAPPFY')} />
+            <WebhookHint />
             <FormFooter
               isLoading={isLoading}
               onBack={() => setStep('type')}
@@ -261,7 +261,7 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
             <Field label="Access Token" type="password" placeholder="System User Token ou Temporary Token" error={waForm.formState.errors.accessToken?.message} {...waForm.register('accessToken')} />
             <Field label="Business Account ID" placeholder="Opcional" optional {...waForm.register('businessAccountId')} />
             <Field label="Webhook Verify Token" placeholder="Token que você definiu no Meta" optional {...waForm.register('webhookSecret')} />
-            <WebhookUrl url={`${apiBaseUrl}/webhooks/WHATSAPP_OFFICIAL`} copied={copied} onCopy={() => handleCopyWebhook('WHATSAPP_OFFICIAL')} />
+            <WebhookHint />
             <FormFooter isLoading={isLoading} onBack={() => setStep('type')} />
           </form>
         ) : selectedType === 'INSTAGRAM' ? (
@@ -271,7 +271,7 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
             <Field label="Page Access Token" type="password" placeholder="Token de longa duração" error={igForm.formState.errors.pageAccessToken?.message} {...igForm.register('pageAccessToken')} />
             <Field label="Instagram User ID" placeholder="Opcional — detectado automaticamente" optional {...igForm.register('igUserId')} />
             <Field label="Webhook Verify Token" placeholder="Token que você definiu no Meta" optional {...igForm.register('webhookSecret')} />
-            <WebhookUrl url={`${apiBaseUrl}/webhooks/INSTAGRAM`} copied={copied} onCopy={() => handleCopyWebhook('INSTAGRAM')} />
+            <WebhookHint />
             <FormFooter isLoading={isLoading} onBack={() => setStep('type')} />
           </form>
         ) : null}
@@ -300,6 +300,16 @@ const Field = forwardRef<HTMLInputElement, FieldProps>(
   ),
 );
 Field.displayName = 'Field';
+
+function WebhookHint() {
+  return (
+    <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-3 dark:border-amber-700/40 dark:bg-amber-900/10">
+      <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+        URL única do webhook gerada após salvar o canal — copie pelo card do canal e cole no painel do provedor.
+      </p>
+    </div>
+  );
+}
 
 function WebhookUrl({ url, copied, onCopy }: { url: string; copied: boolean; onCopy: () => void }) {
   return (
