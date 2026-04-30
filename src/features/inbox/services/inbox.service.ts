@@ -161,6 +161,13 @@ export const inboxService = {
     return data.data;
   },
 
+  async syncConversation(
+    conversationId: string,
+  ): Promise<{ imported: number; fetched: number; syncedAt: string }> {
+    const { data } = await api.post(`/conversations/${conversationId}/sync`, {});
+    return data.data;
+  },
+
   async getStatusCounts(): Promise<Record<string, number>> {
     const { data } = await api.get('/conversations/counts');
     return data.data;
@@ -176,6 +183,11 @@ export const inboxService = {
 
   async bulkReopen(ids: string[]): Promise<void> {
     await Promise.allSettled(ids.map((id) => api.post(`/conversations/${id}/reopen`)));
+  },
+
+  async resolveMediaUrl(messageId: string): Promise<{ url: string; mimeType?: string }> {
+    const { data } = await api.get(`/messages/${messageId}/media`);
+    return data.data;
   },
 
   async transcribeAudio(messageId: string, force = false): Promise<TranscriptionResult> {

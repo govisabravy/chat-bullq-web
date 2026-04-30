@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Radio, Users, Tags, Bell, Building2 } from 'lucide-react';
+import { Radio, Users, Tags, Bell, Building2, KeyRound } from 'lucide-react';
 
 const tabs = [
   { href: '/settings/channels', label: 'Canais', icon: Radio },
@@ -10,6 +10,7 @@ const tabs = [
   { href: '/settings/members', label: 'Membros', icon: Users },
   { href: '/settings/tags', label: 'Tags', icon: Tags },
   { href: '/settings/notifications', label: 'Notificações', icon: Bell },
+  { href: '/settings/api-keys', label: 'API Keys', icon: KeyRound },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

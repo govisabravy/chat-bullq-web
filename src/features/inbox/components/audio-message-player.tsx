@@ -32,7 +32,33 @@ export function AudioMessagePlayer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const mediaUrl = message.content?.mediaUrl;
+  // Inbound WhatsApp audios arrive with no playable URL — the webhook only
+  // carries an encrypted .enc CDN link. We hit the backend to resolve (and
+  // cache) a decrypted URL on first play. Outbound audios already have
+  // content.mediaUrl pointing to our own upload.
+  const initialMediaUrl = message.content?.mediaUrl as string | undefined;
+  const [resolvedUrl, setResolvedUrl] = useState<string | undefined>(initialMediaUrl);
+  const [resolving, setResolving] = useState(false);
+  const mediaUrl = resolvedUrl;
+
+  useEffect(() => {
+    setResolvedUrl(message.content?.mediaUrl);
+  }, [message.content?.mediaUrl]);
+
+  const ensureResolved = async (): Promise<string | null> => {
+    if (resolvedUrl) return resolvedUrl;
+    setResolving(true);
+    try {
+      const { url } = await inboxService.resolveMediaUrl(message.id);
+      setResolvedUrl(url);
+      return url;
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível carregar o áudio');
+      return null;
+    } finally {
+      setResolving(false);
+    }
+  };
 
   const [transcribing, setTranscribing] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptionResult | null>(
@@ -67,10 +93,19 @@ export function AudioMessagePlayer({
   }, [rate]);
 
   const handleTogglePlay = async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
     setError(null);
     try {
+      if (!resolvedUrl) {
+        // Lazy-resolve on first play so we don't hit the provider on every
+        // audio message in the list (e.g., loading a conversation with 50 audios).
+        setLoading(true);
+        const url = await ensureResolved();
+        if (!url) return;
+        // Audio element gets the src on next render — wait a tick before playing.
+        await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      }
+      const audio = audioRef.current;
+      if (!audio) return;
       if (audio.paused) {
         setLoading(true);
         await audio.play();
@@ -115,7 +150,10 @@ export function AudioMessagePlayer({
     }
   };
 
-  if (!mediaUrl) {
+  // Only bail out if there's no way at all to resolve the media — i.e., the
+  // message has neither a cached URL nor an external id the backend could use.
+  // Otherwise we render the player and lazy-resolve on first play.
+  if (!mediaUrl && !message.externalId) {
     return (
       <div className={`rounded-2xl px-4 py-2.5 ${colorBubble}`}>
         <p className="text-sm italic opacity-70">🎵 Áudio indisponível</p>
@@ -145,7 +183,7 @@ export function AudioMessagePlayer({
           }`}
           aria-label={playing ? 'Pausar' : 'Reproduzir'}
         >
-          {loading ? (
+          {loading || resolving ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : playing ? (
             <Pause className="h-4 w-4" />

@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import {
   MessageSquare,
-  Instagram,
-  Smartphone,
   MoreVertical,
   Trash2,
   Zap,
@@ -20,11 +18,12 @@ import { toast } from 'sonner';
 import type { Channel } from '../services/channels.service';
 import { channelsService } from '../services/channels.service';
 import { useChannelSync } from '../hooks/use-channel-sync';
+import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
 
 const channelTypeMap: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  WHATSAPP_ZAPPFY: { label: 'WhatsApp (Zappfy)', icon: MessageSquare, color: 'bg-green-500' },
-  WHATSAPP_OFFICIAL: { label: 'WhatsApp Official', icon: Smartphone, color: 'bg-green-600' },
-  INSTAGRAM: { label: 'Instagram', icon: Instagram, color: 'bg-pink-500' },
+  WHATSAPP_ZAPPFY: { label: 'WhatsApp (Zappfy)', icon: ZappfyIcon, color: 'bg-zinc-50 dark:bg-zinc-800' },
+  WHATSAPP_OFFICIAL: { label: 'WhatsApp Official', icon: MetaIcon, color: 'bg-zinc-50 dark:bg-zinc-800' },
+  INSTAGRAM: { label: 'Instagram', icon: InstagramIcon, color: 'bg-zinc-50 dark:bg-zinc-800' },
 };
 
 interface ChannelCardProps {
@@ -111,8 +110,8 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
 
   return (
     <div className="relative flex items-start gap-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${meta.color}`}>
-        <Icon className="h-6 w-6 text-white" />
+      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-zinc-200/60 dark:border-zinc-700/60 ${meta.color}`}>
+        <Icon className="h-7 w-7" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

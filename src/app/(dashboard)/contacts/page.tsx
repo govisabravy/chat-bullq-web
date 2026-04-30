@@ -3,14 +3,15 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { Search, Users, MessageSquare, Instagram, Smartphone, ExternalLink } from 'lucide-react';
+import { Search, Users, MessageSquare, ExternalLink } from 'lucide-react';
 import { contactsService, type Contact } from '@/features/contacts/services/contacts.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
+import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
 
 const channelIcons: Record<string, React.ElementType> = {
-  WHATSAPP_ZAPPFY: MessageSquare,
-  WHATSAPP_OFFICIAL: Smartphone,
-  INSTAGRAM: Instagram,
+  WHATSAPP_ZAPPFY: ZappfyIcon,
+  WHATSAPP_OFFICIAL: MetaIcon,
+  INSTAGRAM: InstagramIcon,
 };
 
 export default function ContactsPage() {

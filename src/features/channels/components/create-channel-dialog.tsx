@@ -5,29 +5,30 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Loader2, X, MessageSquare, Smartphone, Instagram, Copy, Check } from 'lucide-react';
+import { Loader2, X, Copy, Check } from 'lucide-react';
 import { channelsService, type ChannelType } from '../services/channels.service';
+import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
 
 const channelTypes: { value: ChannelType; label: string; icon: React.ElementType; color: string; description: string }[] = [
   {
     value: 'WHATSAPP_ZAPPFY',
     label: 'WhatsApp (Zappfy)',
-    icon: MessageSquare,
-    color: 'bg-green-500',
+    icon: ZappfyIcon,
+    color: 'bg-zinc-50 dark:bg-zinc-800',
     description: 'Conecte via Zappfy/Uazapi — sem restrição de 24h',
   },
   {
     value: 'WHATSAPP_OFFICIAL',
     label: 'WhatsApp Official',
-    icon: Smartphone,
-    color: 'bg-green-600',
+    icon: MetaIcon,
+    color: 'bg-zinc-50 dark:bg-zinc-800',
     description: 'Meta Cloud API — templates HSM, alta escala',
   },
   {
     value: 'INSTAGRAM',
     label: 'Instagram',
-    icon: Instagram,
-    color: 'bg-pink-500',
+    icon: InstagramIcon,
+    color: 'bg-zinc-50 dark:bg-zinc-800',
     description: 'Instagram API com login empresarial — DMs e stories',
   },
 ];
@@ -42,6 +43,7 @@ const waOfficialSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
   phoneNumberId: z.string().min(1, 'Phone Number ID é obrigatório'),
   accessToken: z.string().min(1, 'Access Token é obrigatório'),
+  appSecret: z.string().min(1, 'App Secret é obrigatório (valida assinatura dos webhooks)'),
   businessAccountId: z.string().optional(),
   webhookSecret: z.string().optional(),
 });
@@ -82,7 +84,7 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
 
   const waForm = useForm<WaOfficialFormData>({
     resolver: zodResolver(waOfficialSchema),
-    defaultValues: { name: '', phoneNumberId: '', accessToken: '', businessAccountId: '', webhookSecret: '' },
+    defaultValues: { name: '', phoneNumberId: '', accessToken: '', appSecret: '', businessAccountId: '', webhookSecret: '' },
   });
 
   const igForm = useForm<InstagramFormData>({
@@ -123,7 +125,17 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
     submitChannel('WHATSAPP_ZAPPFY', data.name, { token: data.token }, data.webhookSecret);
 
   const onSubmitWaOfficial = (data: WaOfficialFormData) =>
-    submitChannel('WHATSAPP_OFFICIAL', data.name, { phoneNumberId: data.phoneNumberId, accessToken: data.accessToken, businessAccountId: data.businessAccountId }, data.webhookSecret);
+    submitChannel(
+      'WHATSAPP_OFFICIAL',
+      data.name,
+      {
+        phoneNumberId: data.phoneNumberId,
+        accessToken: data.accessToken,
+        appSecret: data.appSecret,
+        businessAccountId: data.businessAccountId || undefined,
+      },
+      data.webhookSecret,
+    );
 
   const onSubmitInstagram = (data: InstagramFormData) =>
     submitChannel(
@@ -177,8 +189,8 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
                 onClick={() => handleTypeSelect(ct.value)}
                 className="flex items-center gap-4 rounded-xl border border-zinc-200 p-4 text-left transition-all hover:border-primary hover:shadow-sm dark:border-zinc-700 dark:hover:border-primary"
               >
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${ct.color}`}>
-                  <ct.icon className="h-5 w-5 text-white" />
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200/60 dark:border-zinc-700/60 ${ct.color}`}>
+                  <ct.icon className="h-6 w-6" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{ct.label}</p>
@@ -200,7 +212,8 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
             <Field label="Nome do canal" placeholder="Ex: WhatsApp Business" error={waForm.formState.errors.name?.message} {...waForm.register('name')} />
             <Field label="Phone Number ID" placeholder="Encontrado no Meta Business Suite" error={waForm.formState.errors.phoneNumberId?.message} {...waForm.register('phoneNumberId')} />
             <Field label="Access Token" type="password" placeholder="System User Token ou Temporary Token" error={waForm.formState.errors.accessToken?.message} {...waForm.register('accessToken')} />
-            <Field label="Business Account ID" placeholder="Opcional" optional {...waForm.register('businessAccountId')} />
+            <Field label="App Secret" type="password" placeholder="Chave secreta do app (Settings → Basic na Meta)" error={waForm.formState.errors.appSecret?.message} {...waForm.register('appSecret')} />
+            <Field label="Business Account ID (WABA)" placeholder="Opcional — habilita auto-subscribe do webhook" optional {...waForm.register('businessAccountId')} />
             <Field label="Webhook Verify Token" placeholder="Token que você definiu no Meta" optional {...waForm.register('webhookSecret')} />
             <WebhookUrl url={`${apiBaseUrl}/webhooks/WHATSAPP_OFFICIAL`} copied={copied} onCopy={() => handleCopyWebhook('WHATSAPP_OFFICIAL')} />
             <FormFooter isLoading={isLoading} onBack={() => setStep('type')} />

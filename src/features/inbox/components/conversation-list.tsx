@@ -3,8 +3,6 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
   MessageSquare,
-  Smartphone,
-  Instagram,
   Search,
   X,
   Clock,
@@ -33,12 +31,32 @@ import {
 } from '@headlessui/react';
 import { inboxService, type Conversation } from '../services/inbox.service';
 import { channelsService } from '@/features/channels/services/channels.service';
-import { ZappfyIcon } from '@/components/ui/icons';
+import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { useSocket } from '../hooks/use-socket';
 import { useAuthStore } from '@/stores/auth-store';
 import { useInboxPreferences } from '../hooks/use-inbox-preferences';
 import { ConversationContextMenu } from './conversation-context-menu';
+
+function ListAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const initials = name?.slice(0, 2).toUpperCase() || '??';
+  if (avatarUrl && !failed) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name || 'avatar'}
+        onError={() => setFailed(true)}
+        className="h-10 w-10 rounded-full bg-zinc-100 object-cover dark:bg-zinc-800"
+      />
+    );
+  }
+  return (
+    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-[13px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+      {initials}
+    </div>
+  );
+}
 
 type ScopeFilter = 'ALL' | 'MINE';
 
@@ -49,8 +67,8 @@ const scopeOptions: { label: string; value: ScopeFilter; icon: React.ElementType
 
 const channelIcons: Record<string, React.ElementType> = {
   WHATSAPP_ZAPPFY: ZappfyIcon,
-  WHATSAPP_OFFICIAL: Smartphone,
-  INSTAGRAM: Instagram,
+  WHATSAPP_OFFICIAL: MetaIcon,
+  INSTAGRAM: InstagramIcon,
 };
 
 const statusColors: Record<string, string> = {
@@ -708,15 +726,16 @@ export function ConversationList({ activeId, onSelect }: ConversationListProps) 
                         <Check className="h-4 w-4" />
                       </div>
                     ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-[13px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                        {conv.contact.name?.slice(0, 2).toUpperCase() || '??'}
-                      </div>
+                      <ListAvatar
+                        name={conv.contact.name}
+                        avatarUrl={conv.contact.avatarUrl}
+                      />
                     )}
                     {(() => {
                       const ChannelIcon = channelIcons[conv.channel.type] || MessageSquare;
                       return (
-                        <div className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-[2px] border-white bg-zinc-100 dark:border-zinc-950 dark:bg-zinc-800">
-                          <ChannelIcon className="h-2.5 w-2.5 text-zinc-500 dark:text-zinc-400" />
+                        <div className="absolute -bottom-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 border-white bg-white dark:border-zinc-950 dark:bg-zinc-900">
+                          <ChannelIcon className="h-3 w-3 text-zinc-500 dark:text-zinc-400" />
                         </div>
                       );
                     })()}

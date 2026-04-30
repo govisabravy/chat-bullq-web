@@ -20,3 +20,48 @@ export function ZappfyIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function MetaIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path
+        fill="url(#meta_grad)"
+        d="M18 1L21.62 4.48L26.5 3.28L27.9 8.1L32.72 9.5L31.52 14.38L35 18L31.52 21.62L32.72 26.5L27.9 27.9L26.5 32.72L21.62 31.52L18 35L14.38 31.52L9.5 32.72L8.1 27.9L3.28 26.5L4.48 21.62L1 18L4.48 14.38L3.28 9.5L8.1 8.1L9.5 3.28L14.38 4.48Z"
+      />
+      <path
+        d="M11.5 18.5L16 23L25 13.5"
+        stroke="white"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <defs>
+        <linearGradient id="meta_grad" x1="18" y1="1" x2="18" y2="35" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#1FB1FF" />
+          <stop offset="1" stopColor="#0066E1" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+export function InstagramIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <circle cx="18" cy="18" r="18" fill="url(#ig_grad)" />
+      <rect x="9.5" y="9.5" width="17" height="17" rx="5" stroke="white" strokeWidth="2.6" fill="none" />
+      <circle cx="18" cy="18" r="4.4" stroke="white" strokeWidth="2.6" fill="none" />
+      <circle cx="23.2" cy="12.8" r="1.15" fill="white" />
+      <defs>
+        <radialGradient id="ig_grad" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(7 38) rotate(-55) scale(48)">
+          <stop stopColor="#FFD600" />
+          <stop offset="0.25" stopColor="#FF7A00" />
+          <stop offset="0.55" stopColor="#FF137C" />
+          <stop offset="0.85" stopColor="#A02DAA" />
+          <stop offset="1" stopColor="#5851DB" />
+        </radialGradient>
+      </defs>
+    </svg>
+  );
+}

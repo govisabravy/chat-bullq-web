@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CheckCheck, Clock, AlertCircle } from 'lucide-react';
+import { Check, CheckCheck, Clock, AlertCircle, ExternalLink } from 'lucide-react';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
 import { ChatInput } from './chat-input';
 import { ConversationHeader } from './conversation-header';
@@ -23,6 +23,259 @@ const statusIcons: Record<string, React.ElementType> = {
   READ: CheckCheck,
   FAILED: AlertCircle,
 };
+
+const URL_REGEX = /(https?:\/\/[^\s]+)/gi;
+const IG_CDN_HOSTS = /(lookaside\.fbsbx\.com|cdninstagram\.com|fbcdn\.net)/i;
+
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+function LinkPreviewCard({ url, isOutbound }: { url: string; isOutbound: boolean }) {
+  const [imgOk, setImgOk] = useState(IG_CDN_HOSTS.test(url));
+  const host = safeHostname(url);
+
+  if (imgOk) {
+    return (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+        <img
+          src={url}
+          alt="Mídia compartilhada"
+          className="max-h-64 rounded-lg bg-zinc-100 object-cover dark:bg-zinc-800"
+          onError={() => setImgOk(false)}
+        />
+        <span
+          className={`mt-1 block text-[10px] ${
+            isOutbound ? 'opacity-80' : 'text-zinc-400'
+          }`}
+        >
+          {host}
+        </span>
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${
+        isOutbound
+          ? 'border-primary-foreground/20 bg-primary-foreground/10 hover:bg-primary-foreground/15'
+          : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:hover:bg-zinc-800'
+      }`}
+    >
+      <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" />
+      <span className="truncate font-medium">{host}</span>
+    </a>
+  );
+}
+
+function matchSingleUrl(text: string): string | null {
+  const trimmed = text.trim();
+  const m = trimmed.match(/^(https?:\/\/\S+)$/i);
+  return m ? m[1] : null;
+}
+
+function renderInlineTextWithLinks(text: string, isOutbound: boolean) {
+  const parts = text.split(URL_REGEX);
+  return parts.map((part, i) => {
+    if (URL_REGEX.test(part)) {
+      URL_REGEX.lastIndex = 0;
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`underline underline-offset-2 wrap-break-word ${
+            isOutbound ? 'text-primary-foreground' : 'text-primary'
+          }`}
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+function MessageText({
+  text,
+  isOutbound,
+  className = '',
+}: {
+  text: string;
+  isOutbound: boolean;
+  className?: string;
+}) {
+  const onlyUrl = matchSingleUrl(text);
+  if (onlyUrl) {
+    return <LinkPreviewCard url={onlyUrl} isOutbound={isOutbound} />;
+  }
+  return (
+    <p className={`whitespace-pre-wrap wrap-break-word text-sm ${className}`}>
+      {renderInlineTextWithLinks(text, isOutbound)}
+    </p>
+  );
+}
+
+interface TemplateButtonShape {
+  type?: string;
+  title?: string;
+  url?: string;
+  payload?: string;
+}
+
+interface TemplateElementShape {
+  title?: string;
+  subtitle?: string;
+  imageUrl?: string;
+  defaultActionUrl?: string;
+  buttons?: TemplateButtonShape[];
+}
+
+function TemplateButtonRow({
+  buttons,
+  isOutbound,
+}: {
+  buttons: TemplateButtonShape[];
+  isOutbound: boolean;
+}) {
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      {buttons.map((btn, i) => {
+        const label = btn.title || btn.url || btn.payload || 'Botão';
+        const baseClass = `block rounded-md border px-3 py-1.5 text-center text-xs font-medium transition-colors ${
+          isOutbound
+            ? 'border-primary-foreground/30 bg-primary-foreground/10 hover:bg-primary-foreground/20'
+            : 'border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200 dark:hover:bg-zinc-800'
+        }`;
+        if (btn.url) {
+          return (
+            <a key={i} href={btn.url} target="_blank" rel="noopener noreferrer" className={baseClass}>
+              {label}
+            </a>
+          );
+        }
+        return (
+          <span
+            key={i}
+            className={`${baseClass} cursor-default opacity-80`}
+            title={btn.payload || btn.type || ''}
+          >
+            {label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function TemplateMessage({
+  content,
+  isOutbound,
+}: {
+  content: Record<string, any>;
+  isOutbound: boolean;
+}) {
+  const tpl = (content?.template ?? {}) as {
+    templateType?: string;
+    text?: string;
+    buttons?: TemplateButtonShape[];
+    elements?: TemplateElementShape[];
+  };
+  const headerText = tpl.text || content?.text;
+  const elements = tpl.elements ?? [];
+  const buttons = tpl.buttons ?? [];
+
+  return (
+    <div className="space-y-2">
+      {headerText && <MessageText text={headerText} isOutbound={isOutbound} />}
+
+      {elements.map((el, i) => (
+        <div
+          key={i}
+          className={`overflow-hidden rounded-lg border ${
+            isOutbound
+              ? 'border-primary-foreground/20 bg-primary-foreground/5'
+              : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/60'
+          }`}
+        >
+          {el.imageUrl && (
+            <a
+              href={el.defaultActionUrl || el.imageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block"
+            >
+              <img
+                src={el.imageUrl}
+                alt={el.title || 'Template'}
+                className="max-h-48 w-full object-cover"
+              />
+            </a>
+          )}
+          {(el.title || el.subtitle) && (
+            <div className="px-3 py-2">
+              {el.title && <p className="text-sm font-medium">{el.title}</p>}
+              {el.subtitle && (
+                <p className="mt-0.5 text-xs opacity-75">{el.subtitle}</p>
+              )}
+            </div>
+          )}
+          {el.buttons && el.buttons.length > 0 && (
+            <div className="px-3 pb-2">
+              <TemplateButtonRow buttons={el.buttons} isOutbound={isOutbound} />
+            </div>
+          )}
+        </div>
+      ))}
+
+      {buttons.length > 0 && <TemplateButtonRow buttons={buttons} isOutbound={isOutbound} />}
+
+      {!headerText && elements.length === 0 && buttons.length === 0 && (
+        <p className="text-sm italic opacity-70">[Template]</p>
+      )}
+    </div>
+  );
+}
+
+function ContactAvatar({
+  name,
+  avatarUrl,
+  size = 'md',
+}: {
+  name?: string | null;
+  avatarUrl?: string | null;
+  size?: 'sm' | 'md';
+}) {
+  const [failed, setFailed] = useState(false);
+  const initials = (name || '??').slice(0, 2).toUpperCase();
+  const dim = size === 'sm' ? 'h-7 w-7 text-[10px]' : 'h-10 w-10 text-sm';
+  if (avatarUrl && !failed) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name || 'avatar'}
+        onError={() => setFailed(true)}
+        className={`${dim} shrink-0 rounded-full bg-zinc-200 object-cover dark:bg-zinc-700`}
+      />
+    );
+  }
+  return (
+    <div
+      className={`${dim} flex shrink-0 items-center justify-center rounded-full bg-zinc-200 font-semibold text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400`}
+    >
+      {initials}
+    </div>
+  );
+}
 
 export function ChatPanel({ conversation, onConversationUpdate }: ChatPanelProps) {
   const queryClient = useQueryClient();
@@ -165,12 +418,17 @@ export function ChatPanel({ conversation, onConversationUpdate }: ChatPanelProps
                     className={`flex items-end gap-2 ${isOutbound ? 'justify-end' : 'justify-start'}`}
                   >
                     {!isOutbound && (
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
-                        {(conversation.isGroup && msg.senderName
-                          ? msg.senderName
-                          : conversation.contact.name || '??'
-                        ).slice(0, 2).toUpperCase()}
-                      </div>
+                      <ContactAvatar
+                        size="sm"
+                        name={
+                          conversation.isGroup && msg.senderName
+                            ? msg.senderName
+                            : conversation.contact.name
+                        }
+                        avatarUrl={
+                          conversation.isGroup ? null : conversation.contact.avatarUrl
+                        }
+                      />
                     )}
                     <div className="relative max-w-[75%]">
                       {conversation.isGroup && !isOutbound && msg.senderName && (
@@ -238,7 +496,10 @@ export function ChatPanel({ conversation, onConversationUpdate }: ChatPanelProps
                           }`}
                         >
                           {msg.type === 'TEXT' ? (
-                            <p className="whitespace-pre-wrap text-sm">{msg.content?.text}</p>
+                            <MessageText
+                              text={msg.content?.text || ''}
+                              isOutbound={isOutbound}
+                            />
                           ) : msg.type === 'IMAGE' ? (
                             <div>
                               {msg.content?.mediaUrl && (
@@ -249,7 +510,11 @@ export function ChatPanel({ conversation, onConversationUpdate }: ChatPanelProps
                                 />
                               )}
                               {msg.content?.caption && (
-                                <p className="mt-1.5 text-sm">{msg.content.caption}</p>
+                                <MessageText
+                                  text={msg.content.caption}
+                                  isOutbound={isOutbound}
+                                  className="mt-1.5"
+                                />
                               )}
                             </div>
                           ) : msg.type === 'VIDEO' ? (
@@ -260,6 +525,8 @@ export function ChatPanel({ conversation, onConversationUpdate }: ChatPanelProps
                             <p className="text-sm">🏷️ Sticker</p>
                           ) : msg.type === 'LOCATION' ? (
                             <p className="text-sm">📍 Localização</p>
+                          ) : msg.type === 'TEMPLATE' ? (
+                            <TemplateMessage content={msg.content} isOutbound={isOutbound} />
                           ) : (
                             <p className="text-sm italic opacity-70">[{msg.type}]</p>
                           )}

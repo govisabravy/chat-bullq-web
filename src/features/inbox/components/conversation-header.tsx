@@ -16,6 +16,26 @@ interface ConversationHeaderProps {
   onUpdate: () => void;
 }
 
+function HeaderAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const initials = name?.slice(0, 2).toUpperCase() || '??';
+  if (avatarUrl && !failed) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name || 'avatar'}
+        onError={() => setFailed(true)}
+        className="h-10 w-10 shrink-0 rounded-full bg-zinc-100 object-cover dark:bg-zinc-800"
+      />
+    );
+  }
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+      {initials}
+    </div>
+  );
+}
+
 export function ConversationHeader({ conversation, onUpdate }: ConversationHeaderProps) {
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
@@ -24,11 +44,20 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
   const handleSync = async () => {
     setIsSyncing(true);
     try {
+      const result = await inboxService.syncConversation(conversation.id);
       await Promise.all([
         queryClient.refetchQueries({ queryKey: ['messages', conversation.id] }),
         queryClient.refetchQueries({ queryKey: ['conversations'] }),
       ]);
-      toast.success('Mensagens sincronizadas');
+      if (result.imported > 0) {
+        toast.success(
+          `${result.imported} ${result.imported === 1 ? 'mensagem nova' : 'mensagens novas'} sincronizada${result.imported === 1 ? '' : 's'}`,
+        );
+      } else {
+        toast.success('Tudo em dia — nenhuma mensagem nova');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao sincronizar');
     } finally {
       setIsSyncing(false);
     }
@@ -49,9 +78,10 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
   return (
     <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-sm font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-          {conversation.contact.name?.slice(0, 2).toUpperCase() || '??'}
-        </div>
+        <HeaderAvatar
+          name={conversation.contact.name}
+          avatarUrl={conversation.contact.avatarUrl}
+        />
         <div>
           <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {conversation.contact.name || conversation.contact.phone || 'Desconhecido'}
