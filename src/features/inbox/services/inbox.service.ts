@@ -46,6 +46,9 @@ export interface Conversation {
   aiPausedAt?: string | null;
   aiPausedByUserId?: string | null;
   activeAiAgentId?: string | null;
+  needsHumanAttention?: boolean;
+  humanHandoffAt?: string | null;
+  humanHandoffReason?: string | null;
 }
 
 export interface Message {

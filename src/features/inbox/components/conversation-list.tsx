@@ -12,6 +12,7 @@ import {
   Hourglass,
   CheckCircle2,
   SlidersHorizontal,
+  UserCheck,
 } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -351,6 +352,7 @@ export function ConversationList({ activeId, onSelect, onPrefetch }: Conversatio
               const Icon = channelIcons[conv.channel.type] || MessageSquare;
               const isActive = conv.id === activeId;
               const unread = conv.unreadCount ?? 0;
+              const needsHuman = !!conv.needsHumanAttention;
               return (
                 <motion.li
                   key={conv.id}
@@ -363,9 +365,19 @@ export function ConversationList({ activeId, onSelect, onPrefetch }: Conversatio
                     onMouseEnter={() => onPrefetch?.(conv.id)}
                     onFocus={() => onPrefetch?.(conv.id)}
                     className={`group relative flex w-full gap-3 px-3 py-2.5 text-left transition-smooth ${
-                      isActive ? 'bg-accent' : 'hover:bg-accent/50'
+                      isActive
+                        ? 'bg-accent'
+                        : needsHuman
+                          ? 'bg-warning/10 hover:bg-warning/20'
+                          : 'hover:bg-accent/50'
                     }`}
                   >
+                    {needsHuman && !isActive && (
+                      <span
+                        className="absolute left-0 top-0 h-full w-[3px] bg-warning"
+                        aria-hidden
+                      />
+                    )}
                     {isActive && (
                       <motion.span
                         layoutId="conversation-active"
@@ -405,10 +417,20 @@ export function ConversationList({ activeId, onSelect, onPrefetch }: Conversatio
                         <p className="truncate text-[12px] text-muted-foreground">
                           {getLastMessagePreview(conv)}
                         </p>
+                        {needsHuman && (
+                          <Badge
+                            variant="info"
+                            className="ml-auto h-5 shrink-0 gap-1 rounded-full border-warning/30 bg-warning/20 px-1.5 text-[10px] font-semibold text-warning-foreground"
+                            title={conv.humanHandoffReason || 'Cliente pediu atendimento humano'}
+                          >
+                            <UserCheck className="h-3 w-3" />
+                            Humano
+                          </Badge>
+                        )}
                         {unread > 0 && (
                           <Badge
                             variant="info"
-                            className="ml-auto h-5 min-w-5 shrink-0 justify-center rounded-full border-transparent bg-info px-1.5 text-[10px] font-bold text-info-foreground"
+                            className={`${needsHuman ? '' : 'ml-auto'} h-5 min-w-5 shrink-0 justify-center rounded-full border-transparent bg-info px-1.5 text-[10px] font-bold text-info-foreground`}
                           >
                             {unread > 99 ? '99+' : unread}
                           </Badge>
