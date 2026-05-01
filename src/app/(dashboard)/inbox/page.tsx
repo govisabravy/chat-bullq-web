@@ -7,10 +7,12 @@ import { ConversationList } from '@/features/inbox/components/conversation-list'
 import { ChatPanel } from '@/features/inbox/components/chat-panel';
 import { ChatEmptyState } from '@/features/inbox/components/chat-empty-state';
 import { inboxService } from '@/features/inbox/services/inbox.service';
+import { useInboxRealtime } from '@/features/inbox/hooks/use-inbox-realtime';
 
 export default function InboxPage() {
   const [activeId, setActiveId] = useQueryState('c', parseAsString);
   const queryClient = useQueryClient();
+  useInboxRealtime();
 
   const { data: activeConversation } = useQuery({
     queryKey: ['conversation', activeId],
