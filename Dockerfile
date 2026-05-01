@@ -2,11 +2,13 @@
 
 FROM node:20-alpine AS deps
 WORKDIR /app
+ENV NODE_ENV=development
 COPY package.json yarn.lock ./
-RUN corepack enable && yarn install --frozen-lockfile
+RUN corepack enable && yarn install --frozen-lockfile --production=false
 
 FROM node:20-alpine AS builder
 WORKDIR /app
+ENV NODE_ENV=production
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
