@@ -2,9 +2,12 @@ import { api } from '@/lib/api';
 
 export type ChannelType = 'WHATSAPP_OFFICIAL' | 'WHATSAPP_ZAPPFY' | 'INSTAGRAM';
 
+export type ChannelMemberRole = 'OWNER' | 'MEMBER';
+
 export interface Channel {
   id: string;
   organizationId: string;
+  ownerUserId: string | null;
   type: ChannelType;
   name: string;
   config: Record<string, any>;
@@ -13,6 +16,21 @@ export interface Channel {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  isOwner?: boolean;
+  memberRole?: ChannelMemberRole | 'ADMIN_BYPASS' | null;
+}
+
+export interface ChannelMember {
+  channelId: string;
+  userId: string;
+  role: ChannelMemberRole;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl: string | null;
+  };
 }
 
 export interface CreateChannelPayload {
@@ -74,5 +92,25 @@ export const channelsService = {
   async rotateWebhookToken(id: string): Promise<Channel> {
     const { data } = await api.post<{ data: Channel }>(`/channels/${id}/rotate-webhook-token`);
     return data.data;
+  },
+
+  async listMembers(channelId: string): Promise<ChannelMember[]> {
+    const { data } = await api.get<{ data: ChannelMember[] }>(`/channels/${channelId}/members`);
+    return data.data;
+  },
+
+  async addMember(
+    channelId: string,
+    payload: { userId: string; role?: ChannelMemberRole },
+  ): Promise<ChannelMember> {
+    const { data } = await api.post<{ data: ChannelMember }>(
+      `/channels/${channelId}/members`,
+      payload,
+    );
+    return data.data;
+  },
+
+  async removeMember(channelId: string, userId: string): Promise<void> {
+    await api.delete(`/channels/${channelId}/members/${userId}`);
   },
 };

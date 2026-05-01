@@ -15,7 +15,9 @@ import {
   Copy,
   RotateCw,
   Check,
+  Users,
 } from 'lucide-react';
+import { ChannelMembersDialog } from './channel-members-dialog';
 import { toast } from 'sonner';
 import type { Channel } from '../services/channels.service';
 import { channelsService } from '../services/channels.service';
@@ -37,6 +39,8 @@ export function ChannelCard({ channel, onUpdate, onEdit }: ChannelCardProps) {
   const [isRotating, setIsRotating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const isOwner = !!channel.isOwner;
   const meta = channelTypeMap[channel.type] || { label: channel.type, icon: MessageSquare, color: 'bg-gray-500' };
   const Icon = meta.icon;
   const isZappfy = channel.type === 'WHATSAPP_ZAPPFY';
@@ -155,14 +159,16 @@ export function ChannelCard({ channel, onUpdate, onEdit }: ChannelCardProps) {
               >
                 {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
               </button>
-              <button
-                onClick={handleRotate}
-                disabled={isRotating}
-                className="rounded p-1 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                title="Rotacionar token"
-              >
-                {isRotating ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
-              </button>
+              {isOwner && (
+                <button
+                  onClick={handleRotate}
+                  disabled={isRotating}
+                  className="rounded p-1 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                  title="Rotacionar token"
+                >
+                  {isRotating ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -179,17 +185,19 @@ export function ChannelCard({ channel, onUpdate, onEdit }: ChannelCardProps) {
             )}
             Testar Conexão
           </button>
-          <button
-            onClick={handleToggle}
-            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-          >
-            {channel.isActive ? (
-              <PowerOff className="h-3 w-3" />
-            ) : (
-              <Power className="h-3 w-3" />
-            )}
-            {channel.isActive ? 'Desativar' : 'Ativar'}
-          </button>
+          {isOwner && (
+            <button
+              onClick={handleToggle}
+              className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              {channel.isActive ? (
+                <PowerOff className="h-3 w-3" />
+              ) : (
+                <Power className="h-3 w-3" />
+              )}
+              {channel.isActive ? 'Desativar' : 'Ativar'}
+            </button>
+          )}
         </div>
       </div>
       <div className="relative">
@@ -202,8 +210,15 @@ export function ChannelCard({ channel, onUpdate, onEdit }: ChannelCardProps) {
         {showMenu && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-            <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
-              {onEdit && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+              <button
+                onClick={() => { setShowMembers(true); setShowMenu(false); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                <Users className="h-4 w-4" />
+                Membros
+              </button>
+              {isOwner && onEdit && (
                 <button
                   onClick={() => { onEdit(channel); setShowMenu(false); }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
@@ -212,17 +227,26 @@ export function ChannelCard({ channel, onUpdate, onEdit }: ChannelCardProps) {
                   Editar
                 </button>
               )}
-              <button
-                onClick={() => { handleDelete(); setShowMenu(false); }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-              >
-                <Trash2 className="h-4 w-4" />
-                Remover
-              </button>
+              {isOwner && (
+                <button
+                  onClick={() => { handleDelete(); setShowMenu(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Remover
+                </button>
+              )}
             </div>
           </>
         )}
       </div>
+
+      <ChannelMembersDialog
+        channelId={channel.id}
+        open={showMembers}
+        canManage={isOwner}
+        onClose={() => setShowMembers(false)}
+      />
     </div>
   );
 }
