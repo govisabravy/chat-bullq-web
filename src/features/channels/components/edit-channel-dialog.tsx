@@ -112,7 +112,7 @@ export function EditChannelDialog({ channel, open, onClose, onSaved }: EditChann
     }
   }, [channel, zappfyForm, waForm, igForm]);
 
-  const apiBaseUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/v1`;
+  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1').replace(/\/$/, '');
 
   const webhookSuffix = channel?.webhookToken ? `/${channel.webhookToken}` : '';
   const buildWebhookUrl = (channelType: string) =>
