@@ -83,22 +83,22 @@ export interface AgentRun {
 export const aiAgentsService = {
   async list(): Promise<AiAgent[]> {
     const { data } = await api.get('/ai-agents');
-    return data;
+    return data.data ?? data;
   },
 
   async findOne(id: string): Promise<AiAgent> {
     const { data } = await api.get(`/ai-agents/${id}`);
-    return data;
+    return data.data ?? data;
   },
 
   async create(input: CreateAgentInput): Promise<AiAgent> {
     const { data } = await api.post('/ai-agents', input);
-    return data;
+    return data.data ?? data;
   },
 
   async update(id: string, input: Partial<CreateAgentInput>): Promise<AiAgent> {
     const { data } = await api.patch(`/ai-agents/${id}`, input);
-    return data;
+    return data.data ?? data;
   },
 
   async remove(id: string): Promise<void> {
@@ -110,7 +110,7 @@ export const aiAgentsService = {
     payload: { channelId: string; mode?: AgentMode; trigger?: AgentTrigger },
   ): Promise<AgentChannelLink> {
     const { data } = await api.post(`/ai-agents/${id}/channels`, payload);
-    return data;
+    return data.data ?? data;
   },
 
   async unassignChannel(id: string, channelId: string): Promise<void> {
@@ -119,7 +119,7 @@ export const aiAgentsService = {
 
   async listRuns(id: string, limit = 50): Promise<AgentRun[]> {
     const { data } = await api.get(`/ai-agents/${id}/runs`, { params: { limit } });
-    return data;
+    return data.data ?? data;
   },
 };
 

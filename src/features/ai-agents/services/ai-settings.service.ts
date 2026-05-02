@@ -38,12 +38,12 @@ export interface UpdateAiSettingsInput {
 export const aiSettingsService = {
   async get(): Promise<OrganizationAiSettings> {
     const { data } = await api.get('/organizations/current');
-    return data;
+    return data.data ?? data;
   },
 
   async update(input: UpdateAiSettingsInput): Promise<OrganizationAiSettings> {
     const { data } = await api.patch('/organizations/current', input);
-    return data;
+    return data.data ?? data;
   },
 };
 

@@ -179,7 +179,7 @@ export const inboxService = {
     const { data } = await api.patch(`/conversations/${conversationId}/ai`, {
       enabled,
     });
-    return data;
+    return data.data ?? data;
   },
 
   async getStatusCounts(): Promise<Record<string, number>> {
