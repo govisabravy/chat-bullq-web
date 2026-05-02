@@ -92,9 +92,7 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
     defaultValues: { name: '', accessToken: '', appSecret: '', igBusinessId: '', igAppId: '', webhookSecret: '' },
   });
 
-  const apiBaseUrl = typeof window !== 'undefined'
-    ? `${window.location.origin.replace(/:\d+$/, ':3001')}/api/v1`
-    : 'http://localhost:3001/api/v1';
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
   const handleTypeSelect = (type: ChannelType) => {
     setSelectedType(type);
