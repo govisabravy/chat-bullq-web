@@ -9,6 +9,7 @@ import {
 import {
   Activity, Clock, Target, CheckCircle2, TrendingUp, TrendingDown, Minus,
   Bot, Tag as TagIcon, MessageCircle, CalendarClock,
+  Star, RotateCcw, ShieldCheck,
 } from 'lucide-react';
 import { dashboardService, type SparklinePoint } from '@/features/dashboard/services/dashboard.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
@@ -180,6 +181,14 @@ export default function DashboardPage() {
     queryKey: ['dashboard-agents', orgId],
     queryFn: () => dashboardService.getAgentPerformance(),
   });
+  const { data: csat } = useQuery({
+    queryKey: ['dashboard-csat', orgId],
+    queryFn: () => dashboardService.getCsat(),
+  });
+  const { data: reopens } = useQuery({
+    queryKey: ['dashboard-reopens', orgId],
+    queryFn: () => dashboardService.getReopens(),
+  });
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
@@ -250,6 +259,46 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* Quality KPIs row */}
+      {overview && (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <HeroKpi
+            label="CSAT"
+            value={overview.csatScore ?? '—'}
+            suffix={overview.csatScore !== null ? '/5' : undefined}
+            trend={overview.csatScore !== null ? Math.round(overview.csatTrend * 10) : 0}
+            trendDirection="higher-is-better"
+            icon={Star}
+            accent="#eab308"
+            footer={
+              overview.csatResponses === 0
+                ? <span className="text-zinc-400">Aguardando primeiras avaliações</span>
+                : <span>{overview.csatResponses} resposta{overview.csatResponses === 1 ? '' : 's'} no período</span>
+            }
+          />
+          <HeroKpi
+            label="FCR (sem reabertura)"
+            value={overview.fcrPercent ?? '—'}
+            suffix={overview.fcrPercent !== null ? '%' : undefined}
+            icon={ShieldCheck}
+            accent="#0ea5e9"
+            footer={<span>% das fechadas que não foram reabertas</span>}
+          />
+          <HeroKpi
+            label="Taxa de reabertura"
+            value={reopens?.reopenRate ?? '—'}
+            suffix={reopens?.reopenRate !== null && reopens?.reopenRate !== undefined ? '%' : undefined}
+            icon={RotateCcw}
+            accent="#ef4444"
+            footer={
+              reopens
+                ? <span>{reopens.uniqueConversationsReopened} conversa{reopens.uniqueConversationsReopened === 1 ? '' : 's'} reaberta{reopens.uniqueConversationsReopened === 1 ? '' : 's'} · {reopens.totalReopens} total</span>
+                : <span>Carregando…</span>
+            }
+          />
+        </div>
+      )}
 
       {/* ROW 1 — fluxo + heatmap */}
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
@@ -335,7 +384,18 @@ export default function DashboardPage() {
         </ChartCard>
       </div>
 
-      {/* ROW 4 — agentes (full width) */}
+      {/* ROW 4 — CSAT + reaberturas */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <ChartCard title="CSAT detalhado" icon={Star} subtitle="Distribuição + comentários recentes" height="">
+          {csat ? <CsatPanel data={csat} /> : <div className="h-32 animate-pulse rounded bg-zinc-50 dark:bg-zinc-800" />}
+        </ChartCard>
+
+        <ChartCard title="Reaberturas" icon={RotateCcw} subtitle="Conversas que voltaram após fechamento" height="">
+          {reopens ? <ReopensPanel data={reopens} /> : <div className="h-32 animate-pulse rounded bg-zinc-50 dark:bg-zinc-800" />}
+        </ChartCard>
+      </div>
+
+      {/* ROW 5 — agentes (full width) */}
       <div className="mt-6">
         <ChartCard title="Performance dos agentes" subtitle="Carga atual + métricas no período" height="">
           <AgentList agents={agents || []} />
@@ -403,6 +463,125 @@ function Stat({ label, value, accent, hint }: { label: string; value: string; ac
       <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">{label}</p>
       <p className="mt-1 text-xl font-bold tabular-nums" style={{ color: accent }}>{value}</p>
       {hint && <p className="text-[10px] text-zinc-400">{hint}</p>}
+    </div>
+  );
+}
+
+function CsatPanel({ data }: { data: NonNullable<Awaited<ReturnType<typeof dashboardService.getCsat>>> }) {
+  if (data.totalResponses === 0) {
+    return <p className="py-6 text-center text-xs text-zinc-400">Nenhuma avaliação respondida ainda</p>;
+  }
+  const max = Math.max(...Object.values(data.distribution));
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <Stat label="Score médio" value={data.avgScore !== null ? `${data.avgScore}/5` : '—'} accent="#eab308" />
+        <Stat label="Respostas" value={String(data.totalResponses)} accent="#3b82f6" hint={`de ${data.totalRequested} pedidas`} />
+        <Stat
+          label="Taxa de resposta"
+          value={data.responseRate !== null ? `${data.responseRate}%` : '—'}
+          accent="#10b981"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        {[5, 4, 3, 2, 1].map((s) => {
+          const count = data.distribution[s] ?? 0;
+          return (
+            <div key={s} className="flex items-center gap-2 text-xs">
+              <span className="w-3 text-right tabular-nums text-zinc-500">{s}</span>
+              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+              <div className="relative h-3 flex-1 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800">
+                <div
+                  className="h-full rounded"
+                  style={{
+                    width: max > 0 ? `${(count / max) * 100}%` : '0%',
+                    backgroundColor: s >= 4 ? '#10b981' : s === 3 ? '#f59e0b' : '#ef4444',
+                    opacity: 0.8,
+                  }}
+                />
+              </div>
+              <span className="w-8 text-right tabular-nums text-zinc-500">{count}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {data.recentComments.length > 0 && (
+        <div className="space-y-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">Comentários recentes</p>
+          {data.recentComments.map((c) => (
+            <div key={c.id} className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/60">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">{c.contactName}</span>
+                <span className="flex items-center gap-0.5 text-[10px] text-zinc-500">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star key={i} className={`h-2.5 w-2.5 ${i < c.score ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-300 dark:text-zinc-600'}`} />
+                  ))}
+                </span>
+              </div>
+              <p className="mt-1 line-clamp-2 text-[11px] text-zinc-600 dark:text-zinc-400">{c.comment}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReopensPanel({ data }: { data: NonNullable<Awaited<ReturnType<typeof dashboardService.getReopens>>> }) {
+  if (data.totalReopens === 0 && data.uniqueConversationsReopened === 0) {
+    return <p className="py-6 text-center text-xs text-zinc-400">Nenhuma reabertura no período</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <Stat label="Total reaberturas" value={String(data.totalReopens)} accent="#ef4444" />
+        <Stat label="Conversas únicas" value={String(data.uniqueConversationsReopened)} accent="#f59e0b" />
+        <Stat
+          label="Taxa"
+          value={data.reopenRate !== null ? `${data.reopenRate}%` : '—'}
+          accent="#8b5cf6"
+        />
+      </div>
+
+      <div className="h-24">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data.series}>
+            <defs>
+              <linearGradient id="grad-reopen" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.4} />
+                <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <Tooltip
+              contentStyle={tooltipStyle}
+              labelFormatter={(d) => (typeof d === 'string' ? d : '')}
+              formatter={(v) => [v, 'reaberturas']}
+            />
+            <Area type="monotone" dataKey="value" stroke="#ef4444" fill="url(#grad-reopen)" strokeWidth={1.75} dot={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {data.worstOffenders.length > 0 && (
+        <div className="space-y-1.5 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">Mais reabertas</p>
+          {data.worstOffenders.map((o) => (
+            <div key={o.conversationId} className="flex items-center justify-between rounded bg-zinc-50 px-3 py-1.5 dark:bg-zinc-800/60">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-zinc-700 dark:text-zinc-200">{o.contactName}</p>
+                <p className="text-[10px] text-zinc-400">{o.agentName ?? 'sem responsável'}</p>
+              </div>
+              <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                {o.reopenedCount}×
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
