@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Trash2, Shield, ShieldCheck, User, Users, Copy, Link, X } from 'lucide-react';
+import { UserPlus, Trash2, Shield, ShieldCheck, User, Users, Copy, Link, X, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
+import { MemberChannelsDrawer } from '@/features/settings/components/member-channels-drawer';
 
 const roleLabels: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   OWNER: { label: 'Proprietário', icon: ShieldCheck, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400' },
@@ -28,6 +29,7 @@ export default function SettingsMembersPage() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['members'] });
 
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [drawerMember, setDrawerMember] = useState<Member | null>(null);
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
@@ -147,6 +149,7 @@ export default function SettingsMembersPage() {
             <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Membro</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Role</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Canais</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Entrou em</th>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-zinc-500">Ações</th>
             </tr>
@@ -157,13 +160,14 @@ export default function SettingsMembersPage() {
                 <tr key={i} className="border-b border-zinc-50 dark:border-zinc-800">
                   <td className="px-4 py-3"><div className="h-4 w-36 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" /></td>
                   <td className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" /></td>
+                  <td className="px-4 py-3"><div className="h-4 w-16 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" /></td>
                   <td className="px-4 py-3"><div className="h-4 w-24 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" /></td>
                   <td className="px-4 py-3" />
                 </tr>
               ))
             ) : !members?.length ? (
               <tr>
-                <td colSpan={4} className="px-4 py-12 text-center">
+                <td colSpan={5} className="px-4 py-12 text-center">
                   <Users className="mx-auto h-10 w-10 text-zinc-200 dark:text-zinc-700" />
                   <p className="mt-3 text-sm text-zinc-500">Nenhum membro encontrado</p>
                 </td>
@@ -201,6 +205,21 @@ export default function SettingsMembersPage() {
                         </select>
                       )}
                     </td>
+                    <td className="px-4 py-3">
+                      {m.role === 'OWNER' || m.role === 'ADMIN' ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                          Acesso total
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setDrawerMember(m)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                          data-testid="member-channels-btn"
+                        >
+                          <Hash className="h-3 w-3" /> Gerenciar
+                        </button>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">
                       {new Date(m.joinedAt).toLocaleDateString('pt-BR')}
                     </td>
@@ -221,6 +240,23 @@ export default function SettingsMembersPage() {
           </tbody>
         </table>
       </div>
+
+      <MemberChannelsDrawer
+        open={!!drawerMember}
+        member={
+          drawerMember
+            ? {
+                // Backend resolves member by userId; the existing list returns
+                // userOrganization rows where `userId` is the field we need.
+                id: drawerMember.userId,
+                name: drawerMember.user.name,
+                role: drawerMember.role,
+              }
+            : null
+        }
+        onClose={() => setDrawerMember(null)}
+        onSaved={refresh}
+      />
     </div>
   );
 }

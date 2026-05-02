@@ -24,6 +24,7 @@ interface OrgInfo {
   name: string;
   slug: string;
   role: string;
+  accessibleChannelIds: 'ALL' | string[];
 }
 
 interface AuthResponse {

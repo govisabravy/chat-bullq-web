@@ -12,6 +12,8 @@ interface OrgInfo {
   name: string;
   slug: string;
   role: string;
+  // 'ALL' for OWNER/ADMIN. Array of channel IDs for AGENT (deny-by-default).
+  accessibleChannelIds: 'ALL' | string[];
 }
 
 interface AuthState {
@@ -20,6 +22,7 @@ interface AuthState {
   activeOrgId: string | null;
   setAuth: (user: AuthUser, orgs: OrgInfo[]) => void;
   setActiveOrg: (orgId: string) => void;
+  applyChannelPermissionUpdate: (channelId: string, granted: boolean) => void;
   logout: () => void;
 }
 
@@ -40,6 +43,19 @@ export const useAuthStore = create<AuthState>((set) => ({
   setActiveOrg: (orgId) => {
     localStorage.setItem('active_org_id', orgId);
     set({ activeOrgId: orgId });
+  },
+
+  applyChannelPermissionUpdate: (channelId, granted) => {
+    set((state) => ({
+      organizations: state.organizations.map((org) => {
+        if (org.id !== state.activeOrgId) return org;
+        if (org.accessibleChannelIds === 'ALL') return org;
+        const set = new Set(org.accessibleChannelIds);
+        if (granted) set.add(channelId);
+        else set.delete(channelId);
+        return { ...org, accessibleChannelIds: [...set] };
+      }),
+    }));
   },
 
   logout: () => {

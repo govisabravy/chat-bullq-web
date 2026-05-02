@@ -7,6 +7,7 @@ import { Navbar, NavbarSection, NavbarSpacer } from '@/components/ui/navbar';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { useAuthStore } from '@/stores/auth-store';
 import { authService } from '@/features/auth/services/auth.service';
+import { usePermissionsSync } from '@/features/settings/hooks/use-permissions-sync';
 
 export default function DashboardLayout({
   children,
@@ -16,6 +17,8 @@ export default function DashboardLayout({
   const router = useRouter();
   const { user, setAuth, activeOrgId, setActiveOrg } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
+
+  usePermissionsSync();
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
