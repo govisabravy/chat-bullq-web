@@ -49,6 +49,10 @@ export interface Conversation {
   isGroup: boolean;
   lastMessageAt: string | null;
   createdAt: string;
+  aiEnabled?: boolean;
+  aiDisabledBy?: string | null;
+  aiDisabledAt?: string | null;
+  activeAgentId?: string | null;
   contact: Contact;
   channel: ChannelInfo;
   assignedTo: AgentInfo | null;
@@ -166,6 +170,16 @@ export const inboxService = {
   ): Promise<{ imported: number; fetched: number; syncedAt: string }> {
     const { data } = await api.post(`/conversations/${conversationId}/sync`, {});
     return data.data;
+  },
+
+  async toggleAi(
+    conversationId: string,
+    enabled: boolean,
+  ): Promise<Conversation> {
+    const { data } = await api.patch(`/conversations/${conversationId}/ai`, {
+      enabled,
+    });
+    return data;
   },
 
   async getStatusCounts(): Promise<Record<string, number>> {
