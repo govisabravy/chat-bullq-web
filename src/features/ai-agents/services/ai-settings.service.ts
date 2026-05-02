@@ -1,0 +1,68 @@
+import { api } from '@/lib/api';
+
+export type Weekday =
+  | 'monday'
+  | 'tuesday'
+  | 'wednesday'
+  | 'thursday'
+  | 'friday'
+  | 'saturday'
+  | 'sunday';
+
+export interface BusinessHoursDay {
+  enabled: boolean;
+  windows?: Array<[string, string]>; // ["09:00","18:00"]
+}
+export type BusinessHoursConfig = Partial<Record<Weekday, BusinessHoursDay>>;
+
+export interface OrganizationAiSettings {
+  id: string;
+  name: string;
+  aiEnabled: boolean;
+  aiTimezone: string;
+  aiBusinessHours: BusinessHoursConfig | null;
+  aiOutOfHoursMessage: string | null;
+  aiAutoDisableOnHuman: boolean;
+  aiMonthlyTokenCap: number | null;
+}
+
+export interface UpdateAiSettingsInput {
+  aiEnabled?: boolean;
+  aiTimezone?: string;
+  aiBusinessHours?: BusinessHoursConfig | null;
+  aiOutOfHoursMessage?: string;
+  aiAutoDisableOnHuman?: boolean;
+  aiMonthlyTokenCap?: number | null;
+}
+
+export const aiSettingsService = {
+  async get(): Promise<OrganizationAiSettings> {
+    const { data } = await api.get('/organizations/current');
+    return data;
+  },
+
+  async update(input: UpdateAiSettingsInput): Promise<OrganizationAiSettings> {
+    const { data } = await api.patch('/organizations/current', input);
+    return data;
+  },
+};
+
+export const WEEKDAYS: Array<{ key: Weekday; label: string }> = [
+  { key: 'monday', label: 'Segunda' },
+  { key: 'tuesday', label: 'Terça' },
+  { key: 'wednesday', label: 'Quarta' },
+  { key: 'thursday', label: 'Quinta' },
+  { key: 'friday', label: 'Sexta' },
+  { key: 'saturday', label: 'Sábado' },
+  { key: 'sunday', label: 'Domingo' },
+];
+
+export const DEFAULT_BUSINESS_HOURS: BusinessHoursConfig = {
+  monday: { enabled: true, windows: [['09:00', '18:00']] },
+  tuesday: { enabled: true, windows: [['09:00', '18:00']] },
+  wednesday: { enabled: true, windows: [['09:00', '18:00']] },
+  thursday: { enabled: true, windows: [['09:00', '18:00']] },
+  friday: { enabled: true, windows: [['09:00', '18:00']] },
+  saturday: { enabled: false, windows: [] },
+  sunday: { enabled: false, windows: [] },
+};
