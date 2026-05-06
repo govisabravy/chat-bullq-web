@@ -8,11 +8,13 @@ import { ChatPanel } from '@/features/inbox/components/chat-panel';
 import { ChatEmptyState } from '@/features/inbox/components/chat-empty-state';
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { useInboxRealtime } from '@/features/inbox/hooks/use-inbox-realtime';
+import { useHandoffNotifications } from '@/features/inbox/hooks/use-handoff-notifications';
 
 export default function InboxPage() {
   const [activeId, setActiveId] = useQueryState('c', parseAsString);
   const queryClient = useQueryClient();
   useInboxRealtime();
+  useHandoffNotifications();
 
   const { data: activeConversation } = useQuery({
     queryKey: ['conversation', activeId],
