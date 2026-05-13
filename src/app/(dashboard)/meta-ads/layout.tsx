@@ -10,5 +10,5 @@ export default function MetaAdsLayout({ children }: { children: ReactNode }) {
   if (role !== 'OWNER' && role !== 'ADMIN') {
     return <Forbidden />;
   }
-  return <>{children}</>;
+  return <div className="h-full overflow-y-auto">{children}</div>;
 }
