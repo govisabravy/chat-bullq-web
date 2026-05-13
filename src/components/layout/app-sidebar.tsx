@@ -10,6 +10,7 @@ import {
   Building2,
   ChevronUp,
   Bot,
+  TrendingUp,
 } from 'lucide-react';
 
 import { useAuthStore } from '@/stores/auth-store';
@@ -33,10 +34,16 @@ import {
   DropdownDivider,
 } from '@/components/ui/dropdown';
 
-const navItems = [
+const navItems: Array<{
+  href: string;
+  label: string;
+  icon: typeof MessageSquare;
+  roles?: Array<'OWNER' | 'ADMIN' | 'AGENT'>;
+}> = [
   { href: '/inbox', label: 'Inbox', icon: MessageSquare },
   { href: '/contacts', label: 'Contatos', icon: Users },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/meta-ads', label: 'Meta Ads', icon: TrendingUp, roles: ['OWNER', 'ADMIN'] },
   { href: '/settings/ai-agents', label: 'Agentes IA', icon: Bot },
 ];
 
@@ -44,6 +51,10 @@ export function AppSidebar() {
   const { user, organizations, activeOrgId, setActiveOrg, logout } =
     useAuthStore();
   const activeOrg = organizations.find((o) => o.id === activeOrgId);
+
+  const visibleItems = navItems.filter(
+    (item) => !item.roles || (activeOrg?.role && item.roles.includes(activeOrg.role as 'OWNER' | 'ADMIN' | 'AGENT')),
+  );
 
   const handleOrgSwitch = (orgId: string) => {
     setActiveOrg(orgId);
@@ -83,7 +94,7 @@ export function AppSidebar() {
 
       <SidebarBody>
         <SidebarSection>
-          {navItems.map((item) => (
+          {visibleItems.map((item) => (
             <SidebarItem key={item.href} href={item.href}>
               <item.icon className="size-5" />
               <SidebarLabel>{item.label}</SidebarLabel>
