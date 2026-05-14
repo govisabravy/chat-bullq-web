@@ -94,6 +94,10 @@ export const aiAgentsService = {
     const { data } = await api.post(`/ai-agents/${id}/duplicate`);
     return data.data;
   },
+  async destroy(id: string): Promise<{ id: string; removedFiles: number }> {
+    const { data } = await api.delete(`/ai-agents/${id}/destroy`);
+    return data.data;
+  },
   async validate(id: string): Promise<{ ok: boolean; error?: string }> {
     const { data } = await api.post(`/ai-agents/${id}/validate`);
     return data.data;
