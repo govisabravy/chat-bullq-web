@@ -13,13 +13,25 @@ import {
   PlayCircle,
   Bot,
   BotOff,
+  ChevronDown,
+  Check,
+  ArrowRightLeft,
 } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip } from '@/components/ui/tooltip';
+import {
+  Dropdown,
+  DropdownButton,
+  DropdownMenu,
+  DropdownItem,
+  DropdownLabel,
+  DropdownDivider,
+} from '@/components/ui/dropdown';
 import { inboxService, type Conversation } from '../services/inbox.service';
+import { aiAgentsService } from '@/features/ai-agents/services/ai-agents.service';
 
 const channelIcons: Record<string, React.ElementType> = {
   WHATSAPP_ZAPPFY: MessageSquare,
@@ -102,6 +114,26 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
     onError: (err: any) => toast.error(err?.message ?? 'Erro ao desativar IA'),
   });
 
+  const { data: agents = [] } = useQuery({
+    queryKey: ['ai-agents'],
+    queryFn: () => aiAgentsService.list(),
+    staleTime: 5 * 60_000,
+  });
+  const activeAgents = agents.filter((a) => a.isActive);
+  const currentAgent = agents.find((a) => a.id === conversation.activeAiAgentId);
+
+  const switchAgentMutation = useMutation({
+    mutationFn: (agentId: string) => inboxService.activateAi(conversation.id, agentId),
+    onSuccess: (_data, agentId) => {
+      const name = agents.find((a) => a.id === agentId)?.name ?? 'agente';
+      toast.success(`Conversa atribuída ao ${name}`);
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });
+      onUpdate();
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Erro ao trocar agente'),
+  });
+
   const displayName =
     conversation.contact.name || conversation.contact.phone || 'Desconhecido';
 
@@ -134,7 +166,57 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
       </div>
 
       <div className="flex items-center gap-1.5 shrink-0">
-        {!conversation.activeAiAgentId && conversation.status !== 'CLOSED' && (
+        {conversation.status !== 'CLOSED' && activeAgents.length > 0 && (
+          <Dropdown>
+            <DropdownButton className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs hover:bg-accent">
+              <ArrowRightLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">
+                {currentAgent ? currentAgent.name : 'Atribuir agente'}
+              </span>
+              <ChevronDown className="h-3 w-3" />
+            </DropdownButton>
+            <DropdownMenu anchor="bottom end" className="min-w-56">
+              {activeAgents.map((a) => (
+                <DropdownItem
+                  key={a.id}
+                  onClick={() => {
+                    if (!switchAgentMutation.isPending) switchAgentMutation.mutate(a.id);
+                  }}
+                >
+                  {a.id === conversation.activeAiAgentId ? (
+                    <Check className="h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <Bot className="h-4 w-4" />
+                  )}
+                  <DropdownLabel>
+                    <div>
+                      <div className="font-medium">{a.name}</div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {a.requiresClientMatch ? 'Pós-venda (CRM)' : a.generationModel}
+                      </div>
+                    </div>
+                  </DropdownLabel>
+                </DropdownItem>
+              ))}
+              {conversation.activeAiAgentId && (
+                <>
+                  <DropdownDivider />
+                  <DropdownItem
+                    onClick={() => {
+                      if (!deactivateMutation.isPending) deactivateMutation.mutate();
+                    }}
+                  >
+                    <BotOff className="h-4 w-4" />
+                    <DropdownLabel>
+                      <span className="text-destructive">Desativar IA</span>
+                    </DropdownLabel>
+                  </DropdownItem>
+                </>
+              )}
+            </DropdownMenu>
+          </Dropdown>
+        )}
+        {!conversation.activeAiAgentId && conversation.status !== 'CLOSED' && activeAgents.length === 0 && (
           <Tooltip content="Ativar IA nesta conversa" side="bottom">
             <Button
               variant="primary"
@@ -143,18 +225,6 @@ export function ConversationHeader({ conversation, onUpdate }: ConversationHeade
               loading={activateMutation.isPending}
             >
               <Bot />
-            </Button>
-          </Tooltip>
-        )}
-        {conversation.activeAiAgentId && (
-          <Tooltip content="Desativar IA nesta conversa" side="bottom">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => deactivateMutation.mutate()}
-              loading={deactivateMutation.isPending}
-            >
-              <BotOff />
             </Button>
           </Tooltip>
         )}
