@@ -72,8 +72,12 @@ export function useTriggerSync() {
 export function useReconnect() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: string; accessToken: string }) =>
-      metaAdsService.reconnect(args.id, args.accessToken),
+    mutationFn: (args: { id: string; accessToken: string; appId?: string; appSecret?: string }) =>
+      metaAdsService.reconnect(args.id, {
+        accessToken: args.accessToken,
+        appId: args.appId,
+        appSecret: args.appSecret,
+      }),
     onSuccess: (account) => {
       toast.success(`Conta ${account.name} reconectada`);
       qc.invalidateQueries({ queryKey: ['meta-ads', 'accounts'] });

@@ -97,6 +97,14 @@ export interface ConnectAccountPayload {
   externalId: string;
   accessToken: string;
   name?: string;
+  appId?: string;
+  appSecret?: string;
+}
+
+export interface ReconnectAccountPayload {
+  accessToken: string;
+  appId?: string;
+  appSecret?: string;
 }
 
 export interface DateRange {
@@ -149,8 +157,9 @@ export const metaAdsService = {
     const { data } = await api.post(`/meta-ads/accounts/${id}/sync`, scope ? { scope } : {});
     return data.data;
   },
-  async reconnect(id: string, accessToken: string): Promise<AdAccount> {
-    const { data } = await api.post(`/meta-ads/accounts/${id}/reconnect`, { accessToken });
+  async reconnect(id: string, payload: ReconnectAccountPayload | string): Promise<AdAccount> {
+    const body = typeof payload === 'string' ? { accessToken: payload } : payload;
+    const { data } = await api.post(`/meta-ads/accounts/${id}/reconnect`, body);
     return data.data;
   },
 

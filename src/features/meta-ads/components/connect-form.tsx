@@ -98,6 +98,39 @@ function ConnectFormInner({
         />
       </div>
 
+      <details className="rounded-md border border-border bg-muted/20 px-3 py-2">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+          Avançado: credenciais do FB App (token vira 60d)
+        </summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Se você passar App ID + App Secret do seu Facebook App, o backend troca o token curto (1-2h) por um long-lived (~60d) antes de salvar. Isso evita o erro &quot;Token expirou&quot; toda hora.
+          </p>
+          <div className="space-y-2">
+            <label htmlFor="appId" className="text-xs font-medium">App ID</label>
+            <input
+              id="appId"
+              placeholder="959171176921194"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              {...form.register('appId')}
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="appSecret" className="text-xs font-medium">App Secret</label>
+            <input
+              id="appSecret"
+              type="password"
+              placeholder="••••••••"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              {...form.register('appSecret')}
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Pega em developers.facebook.com/apps/&lt;id&gt;/settings/basic. Armazenado encriptado.
+            </p>
+          </div>
+        </div>
+      </details>
+
       {serverError && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {serverError}
@@ -136,7 +169,12 @@ function ReconnectFormInner({
   const onSubmit = async (data: ReconnectAccountFormData) => {
     setServerError(null);
     try {
-      await mutate.mutateAsync({ id: accountId, accessToken: data.accessToken });
+      await mutate.mutateAsync({
+        id: accountId,
+        accessToken: data.accessToken,
+        appId: data.appId,
+        appSecret: data.appSecret,
+      });
       router.push(`/meta-ads/accounts/${accountId}`);
     } catch (err) {
       setServerError(err instanceof Error ? err.message : 'Erro inesperado');
@@ -163,7 +201,36 @@ function ReconnectFormInner({
         {form.formState.errors.accessToken && (
           <p className="text-xs text-destructive">{form.formState.errors.accessToken.message}</p>
         )}
+        <p className="text-[10px] text-muted-foreground">
+          Se a conta já tem App ID + App Secret salvos, eles serão reusados pra trocar o token por long-lived. Você pode também sobrescrever abaixo.
+        </p>
       </div>
+
+      <details className="rounded-md border border-border bg-muted/20 px-3 py-2">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+          Avançado: sobrescrever App ID / App Secret
+        </summary>
+        <div className="mt-3 space-y-3">
+          <div className="space-y-2">
+            <label htmlFor="appId" className="text-xs font-medium">App ID</label>
+            <input
+              id="appId"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              {...form.register('appId')}
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="appSecret" className="text-xs font-medium">App Secret</label>
+            <input
+              id="appSecret"
+              type="password"
+              placeholder="••••••••"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              {...form.register('appSecret')}
+            />
+          </div>
+        </div>
+      </details>
 
       {serverError && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
