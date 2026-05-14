@@ -3,8 +3,18 @@ import { toast } from 'sonner';
 import {
   AdAccount,
   ConnectAccountPayload,
+  DiscoverPayload,
   metaAdsService,
 } from '../services/meta-ads.service';
+
+export function useDiscoverAccounts() {
+  return useMutation({
+    mutationFn: (payload: DiscoverPayload) => metaAdsService.discoverAccounts(payload),
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Erro ao buscar contas');
+    },
+  });
+}
 
 export function useAdAccounts() {
   return useQuery({

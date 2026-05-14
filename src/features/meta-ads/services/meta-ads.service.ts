@@ -93,6 +93,21 @@ export interface AccountSummary {
   }>;
 }
 
+export interface DiscoverPayload {
+  accessToken: string;
+  appId?: string;
+  appSecret?: string;
+}
+
+export interface DiscoveredAdAccount {
+  externalId: string;
+  name: string;
+  currency: string;
+  timezone: string;
+  accountStatus: number | null;
+  alreadyConnected: boolean;
+}
+
 export interface ConnectAccountPayload {
   externalId: string;
   accessToken: string;
@@ -138,6 +153,10 @@ function paramsOf(input: Record<string, string | undefined>): Record<string, str
 
 export const metaAdsService = {
   // Accounts
+  async discoverAccounts(payload: DiscoverPayload): Promise<DiscoveredAdAccount[]> {
+    const { data } = await api.post('/meta-ads/accounts/discover', payload);
+    return data.data;
+  },
   async connectAccount(payload: ConnectAccountPayload): Promise<AdAccount> {
     const { data } = await api.post('/meta-ads/accounts', payload);
     return data.data;
