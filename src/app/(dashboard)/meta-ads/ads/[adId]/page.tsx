@@ -2,7 +2,7 @@
 
 import { use, useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, DollarSign, Eye, MousePointerClick, Target, ImageOff } from 'lucide-react';
+import { ArrowLeft, DollarSign, Eye, MousePointerClick, UserPlus, ImageOff } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAd } from '@/features/meta-ads/hooks/use-ads';
 import { useTimeseries } from '@/features/meta-ads/hooks/use-insights';
@@ -99,7 +99,7 @@ export default function AdDetailPage({ params }: { params: Promise<{ adId: strin
         <MetricCard label="Spend" value={spendDisplay} icon={<DollarSign className="h-4 w-4" />} />
         <MetricCard label="Impressões" value={ad.metrics.impressions} icon={<Eye className="h-4 w-4" />} />
         <MetricCard label="Clicks" value={ad.metrics.clicks} icon={<MousePointerClick className="h-4 w-4" />} />
-        <MetricCard label="Conversões" value={ad.metrics.conversions} icon={<Target className="h-4 w-4" />} />
+        <MetricCard label="Leads" value={ad.metrics.leads} icon={<UserPlus className="h-4 w-4" />} />
       </div>
 
       <Card>

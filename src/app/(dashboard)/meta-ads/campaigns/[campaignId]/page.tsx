@@ -3,7 +3,7 @@
 import { use, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, DollarSign, Eye, MousePointerClick, Target } from 'lucide-react';
+import { ArrowLeft, DollarSign, Eye, MousePointerClick, UserPlus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useCampaign } from '@/features/meta-ads/hooks/use-campaigns';
 import { useAdSets } from '@/features/meta-ads/hooks/use-ad-sets';
@@ -77,7 +77,7 @@ export default function CampaignDrillPage({ params }: { params: Promise<{ campai
         <MetricCard label="Spend" value={spendDisplay} icon={<DollarSign className="h-4 w-4" />} />
         <MetricCard label="Impressões" value={campaign.metrics.impressions} icon={<Eye className="h-4 w-4" />} />
         <MetricCard label="Clicks" value={campaign.metrics.clicks} icon={<MousePointerClick className="h-4 w-4" />} />
-        <MetricCard label="Conversões" value={campaign.metrics.conversions} icon={<Target className="h-4 w-4" />} />
+        <MetricCard label="Leads" value={campaign.metrics.leads} icon={<UserPlus className="h-4 w-4" />} />
       </div>
 
       <Card>

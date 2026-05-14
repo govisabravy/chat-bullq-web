@@ -67,8 +67,8 @@ export function MetricsTable<T extends MetricsTableRow>({
             <th className="px-3 py-2 text-right">Clicks</th>
             <th className="px-3 py-2 text-right">CTR</th>
             <th className="px-3 py-2 text-right">CPC</th>
-            <th className="px-3 py-2 text-right">Conv</th>
-            <th className="px-3 py-2 text-right">ROAS</th>
+            <th className="px-3 py-2 text-right">Leads</th>
+            <th className="px-3 py-2 text-right">CPL</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -95,8 +95,8 @@ export function MetricsTable<T extends MetricsTableRow>({
               <td className="px-3 py-2 text-right">{fmtNumber(row.metrics.clicks)}</td>
               <td className="px-3 py-2 text-right">{fmtPercent(row.metrics.ctr)}</td>
               <td className="px-3 py-2 text-right">{fmtCurrency(row.metrics.cpc)}</td>
-              <td className="px-3 py-2 text-right">{fmtNumber(row.metrics.conversions)}</td>
-              <td className="px-3 py-2 text-right">{row.metrics.roas ?? '—'}</td>
+              <td className="px-3 py-2 text-right">{fmtNumber(row.metrics.leads)}</td>
+              <td className="px-3 py-2 text-right">{row.metrics.cpl ? fmtCurrency(row.metrics.cpl) : '—'}</td>
             </tr>
           ))}
         </tbody>

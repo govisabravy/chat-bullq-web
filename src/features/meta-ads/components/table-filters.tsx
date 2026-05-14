@@ -6,7 +6,7 @@ import { MetaCampaignStatus } from '../services/meta-ads.service';
 export interface TableFiltersState {
   search: string;
   status: MetaCampaignStatus | 'ALL';
-  sort: 'spend' | 'impressions' | 'clicks' | 'conversions' | 'ctr' | 'name';
+  sort: 'spend' | 'impressions' | 'clicks' | 'leads' | 'ctr' | 'name';
 }
 
 interface TableFiltersProps {
@@ -26,7 +26,7 @@ const SORT_OPTIONS: Array<{ value: TableFiltersState['sort']; label: string }> =
   { value: 'spend', label: 'Spend (maior)' },
   { value: 'impressions', label: 'Impressões' },
   { value: 'clicks', label: 'Clicks' },
-  { value: 'conversions', label: 'Conversões' },
+  { value: 'leads', label: 'Leads' },
   { value: 'ctr', label: 'CTR' },
   { value: 'name', label: 'Nome (A-Z)' },
 ];
@@ -76,7 +76,7 @@ interface ApplyFiltersRow {
   metrics: {
     impressions: number;
     clicks: number;
-    conversions: number;
+    leads: number;
     spend: string;
     ctr: string;
   };
@@ -96,7 +96,7 @@ export function applyFilters<T extends ApplyFiltersRow>(items: T[], f: TableFilt
       case 'name': return a.name.localeCompare(b.name);
       case 'impressions': return b.metrics.impressions - a.metrics.impressions;
       case 'clicks': return b.metrics.clicks - a.metrics.clicks;
-      case 'conversions': return b.metrics.conversions - a.metrics.conversions;
+      case 'leads': return b.metrics.leads - a.metrics.leads;
       case 'ctr': return parseFloat(b.metrics.ctr) - parseFloat(a.metrics.ctr);
       case 'spend':
       default: return parseFloat(b.metrics.spend) - parseFloat(a.metrics.spend);
