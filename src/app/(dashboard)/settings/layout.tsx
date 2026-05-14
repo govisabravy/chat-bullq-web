@@ -60,7 +60,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
           </p>
         </div>
       </div>
-      <div className="flex h-full min-h-0">
+      <div className="flex flex-1 min-h-0">
         <nav className="w-56 shrink-0 border-r border-border bg-card p-3 flex flex-col gap-1">
           {items.map((item) => (
             <SettingsNavLink
