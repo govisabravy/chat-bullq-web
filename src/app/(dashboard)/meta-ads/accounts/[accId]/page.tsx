@@ -5,13 +5,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  DollarSign, Eye, MousePointerClick, Target, AlertCircle,
-  Percent, MousePointer, BarChart3, TrendingUp, Download,
+  DollarSign, AlertCircle,
+  Percent, BarChart3, TrendingUp, Download, UserPlus, DollarSign as Money, Repeat, Target,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAdAccount } from '@/features/meta-ads/hooks/use-ad-accounts';
 import { useCampaigns } from '@/features/meta-ads/hooks/use-campaigns';
-import { useSummary, useTimeseries } from '@/features/meta-ads/hooks/use-insights';
+import { useSummary, useTimeseries, useTopAdsByCpl } from '@/features/meta-ads/hooks/use-insights';
 import { AccountSelector } from '@/features/meta-ads/components/account-selector';
 import { DateRangePicker, useDateRange } from '@/features/meta-ads/components/date-range-picker';
 import { SyncStatusBadge } from '@/features/meta-ads/components/sync-status-badge';
@@ -21,6 +21,7 @@ import { MultiMetricChart } from '@/features/meta-ads/components/multi-metric-ch
 import { FunnelChart } from '@/features/meta-ads/components/funnel-chart';
 import { StatusDonut } from '@/features/meta-ads/components/status-donut';
 import { TopCampaignsCards } from '@/features/meta-ads/components/top-campaigns-cards';
+import { TopAdsByCpl } from '@/features/meta-ads/components/top-ads-by-cpl';
 import {
   TableFilters,
   TableFiltersState,
@@ -50,19 +51,24 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
     from: from ?? undefined,
     to: to ?? undefined,
   });
-  const { data: spendSeries, isLoading: tsLoading } = useTimeseries({
+  const { data: leadsSeries, isLoading: tsLoading } = useTimeseries({
     accountId: accId,
     level: 'ACCOUNT',
     from: from ?? undefined,
     to: to ?? undefined,
-    metric: 'spend',
+    metric: 'leads',
   });
-  const { data: convSeries } = useTimeseries({
+  const { data: cplSeries } = useTimeseries({
     accountId: accId,
     level: 'ACCOUNT',
     from: from ?? undefined,
     to: to ?? undefined,
-    metric: 'conversions',
+    metric: 'cpl',
+  });
+  const { data: topAdsCpl } = useTopAdsByCpl({
+    accountId: accId,
+    from: from ?? undefined,
+    to: to ?? undefined,
   });
   const { data: campaigns = [], isLoading: loadingCampaigns } = useCampaigns(accId, {
     from: from ?? undefined,
@@ -88,12 +94,15 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
     const impr = totals.impressions;
     const clicks = totals.clicks;
     const spend = parseFloat(totals.spend) || 0;
-    const conv = totals.conversions;
+    const leads = totals.leads;
+    const reach = totals.reach;
     const convVal = parseFloat(totals.conversionValue) || 0;
     return {
       ctr: impr > 0 ? (clicks / impr) * 100 : 0,
       cpc: clicks > 0 ? spend / clicks : 0,
       cpm: impr > 0 ? (spend / impr) * 1000 : 0,
+      cpl: leads > 0 ? spend / leads : null,
+      frequency: reach > 0 ? impr / reach : 0,
       roas: spend > 0 ? convVal / spend : null,
     };
   }, [totals]);
@@ -144,25 +153,38 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
         </div>
       )}
 
-      {/* 8 KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
-          label="Spend"
+          label="Gasto"
           value={totals ? formatCurrency(totals.spend, currency) : '—'}
           delta={delta?.spend}
           icon={<DollarSign className="h-4 w-4" />}
         />
         <MetricCard
-          label="Impressões"
-          value={totals?.impressions ?? 0}
-          delta={delta?.impressions}
-          icon={<Eye className="h-4 w-4" />}
+          label="Leads"
+          value={totals?.leads ?? 0}
+          delta={delta?.leads}
+          icon={<UserPlus className="h-4 w-4" />}
         />
         <MetricCard
-          label="Clicks"
-          value={totals?.clicks ?? 0}
-          delta={delta?.clicks}
-          icon={<MousePointerClick className="h-4 w-4" />}
+          label="CPL"
+          value={derived?.cpl !== null && derived?.cpl !== undefined ? formatCurrency(derived.cpl, currency) : '—'}
+          icon={<Money className="h-4 w-4" />}
+        />
+        <MetricCard
+          label="CTR"
+          value={derived ? formatPercent(derived.ctr) : '—'}
+          icon={<Percent className="h-4 w-4" />}
+        />
+        <MetricCard
+          label="CPM"
+          value={derived ? formatCurrency(derived.cpm, currency) : '—'}
+          icon={<BarChart3 className="h-4 w-4" />}
+        />
+        <MetricCard
+          label="Frequência"
+          value={derived ? derived.frequency.toFixed(2) : '—'}
+          icon={<Repeat className="h-4 w-4" />}
         />
         <MetricCard
           label="Conversões"
@@ -171,47 +193,34 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
           icon={<Target className="h-4 w-4" />}
         />
         <MetricCard
-          label="CTR"
-          value={derived ? formatPercent(derived.ctr) : '—'}
-          icon={<Percent className="h-4 w-4" />}
-        />
-        <MetricCard
-          label="CPC"
-          value={derived ? formatCurrency(derived.cpc, currency) : '—'}
-          icon={<MousePointer className="h-4 w-4" />}
-        />
-        <MetricCard
-          label="CPM"
-          value={derived ? formatCurrency(derived.cpm, currency) : '—'}
-          icon={<BarChart3 className="h-4 w-4" />}
-        />
-        <MetricCard
           label="ROAS"
           value={derived?.roas !== null && derived?.roas !== undefined ? `${derived.roas.toFixed(2)}x` : '—'}
           icon={<TrendingUp className="h-4 w-4" />}
         />
       </div>
 
-      {/* Multi-metric chart + status donut row */}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardContent className="p-5">
-            <h3 className="text-sm font-semibold">Desempenho ao longo do tempo</h3>
+            <h3 className="text-sm font-semibold">Tendência diária de Leads e CPL</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Se CPL sobe sem Leads subir, é hora de revisar criativo.
+            </p>
             <div className="mt-4">
               <MultiMetricChart
                 loading={tsLoading}
                 series={[
                   {
-                    data: spendSeries ?? [],
-                    label: 'Spend',
-                    color: 'oklch(0.68 0.15 230)',
+                    data: leadsSeries ?? [],
+                    label: 'Leads',
+                    color: 'oklch(0.72 0.17 150)',
                     type: 'bar',
                     yAxis: 'left',
                   },
                   {
-                    data: convSeries ?? [],
-                    label: 'Conversões',
-                    color: 'oklch(0.62 0.2 290)',
+                    data: cplSeries ?? [],
+                    label: 'CPL',
+                    color: 'oklch(0.68 0.18 25)',
                     type: 'line',
                     yAxis: 'right',
                   },
@@ -260,7 +269,18 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
         </Card>
       </div>
 
-      {/* Campaigns table */}
+      <Card>
+        <CardContent className="p-5">
+          <h3 className="text-sm font-semibold">Anúncios rankeados por CPL (menor primeiro)</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Qual criativo gera lead mais barato. Click numa linha pra ver detalhes do anúncio.
+          </p>
+          <div className="mt-4">
+            <TopAdsByCpl ads={topAdsCpl ?? []} currency={currency} />
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

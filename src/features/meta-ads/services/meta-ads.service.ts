@@ -5,7 +5,7 @@ export type MetaSyncStatus = 'IDLE' | 'RUNNING' | 'SUCCESS' | 'FAILED';
 export type MetaCampaignStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED' | 'DELETED';
 export type MetaInsightLevel = 'ACCOUNT' | 'CAMPAIGN' | 'ADSET' | 'AD';
 export type MetaInsightMetric =
-  | 'impressions' | 'clicks' | 'spend' | 'conversions' | 'ctr' | 'cpc' | 'cpm';
+  | 'impressions' | 'clicks' | 'spend' | 'conversions' | 'leads' | 'ctr' | 'cpc' | 'cpm' | 'cpl' | 'frequency';
 
 export interface AdAccount {
   id: string;
@@ -28,8 +28,24 @@ export interface Metrics {
   cpc: string;
   cpm: string;
   conversions: number;
+  leads: number;
   conversionValue: string;
   roas: string | null;
+  cpl: string | null;
+  frequency: string;
+  reach: number;
+}
+
+export interface TopAdByCpl {
+  adId: string | null;
+  name: string;
+  thumbnailUrl: string | null;
+  cpl: string;
+  leads: number;
+  spend: string;
+  impressions: number;
+  clicks: number;
+  conversions: number;
 }
 
 export interface CampaignWithMetrics {
@@ -75,6 +91,8 @@ export interface AccountSummary {
     clicks: number;
     spend: string;
     conversions: number;
+    leads: number;
+    reach: number;
     conversionValue: string;
   };
   deltaVsPrevious: {
@@ -82,6 +100,7 @@ export interface AccountSummary {
     impressions: number | null;
     clicks: number | null;
     conversions: number | null;
+    leads: number | null;
   };
   topCampaigns: Array<{
     campaignId: string | null;
@@ -229,6 +248,12 @@ export const metaAdsService = {
   },
   async summary(params: SummaryParams): Promise<AccountSummary> {
     const { data } = await api.get('/meta-ads/insights/summary', {
+      params: paramsOf(params as unknown as Record<string, string | undefined>),
+    });
+    return data.data;
+  },
+  async topAdsByCpl(params: SummaryParams): Promise<TopAdByCpl[]> {
+    const { data } = await api.get('/meta-ads/insights/top-ads-by-cpl', {
       params: paramsOf(params as unknown as Record<string, string | undefined>),
     });
     return data.data;
