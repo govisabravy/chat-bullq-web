@@ -42,6 +42,8 @@ export interface AiAgent {
   autoResumeMinutes?: number;
   activationMode?: 'ALL_CONVERSATIONS' | 'PER_CONVERSATION';
   handoffTargets?: { targetAgentId: string }[];
+  requiresClientMatch?: boolean;
+  clientSourceProvider?: 'ZOHO_CRM' | null;
   createdAt: string;
   updatedAt: string;
 }

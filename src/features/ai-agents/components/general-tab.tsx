@@ -49,6 +49,8 @@ type FormState = {
   pauseBehavior: 'MANUAL' | 'AUTO_RESUME';
   autoResumeMinutes: number;
   activationMode: 'ALL_CONVERSATIONS' | 'PER_CONVERSATION';
+  requiresClientMatch: boolean;
+  clientSourceProvider: 'ZOHO_CRM' | '';
 };
 
 function buildInitialForm(agent: AiAgent): FormState {
@@ -79,6 +81,8 @@ function buildInitialForm(agent: AiAgent): FormState {
     pauseBehavior: agent.pauseBehavior ?? 'MANUAL',
     autoResumeMinutes: agent.autoResumeMinutes ?? 15,
     activationMode: agent.activationMode ?? 'ALL_CONVERSATIONS',
+    requiresClientMatch: agent.requiresClientMatch ?? false,
+    clientSourceProvider: (agent.clientSourceProvider ?? '') as 'ZOHO_CRM' | '',
   };
 }
 
@@ -203,6 +207,7 @@ export function GeneralTab({ agent }: { agent: AiAgent }) {
       if (!form.embeddingsApiKey) delete payload.embeddingsApiKey;
       payload.dailyTokenCap = form.dailyTokenCap === '' ? null : Number(form.dailyTokenCap);
       payload.dailyMessageCap = form.dailyMessageCap === '' ? null : Number(form.dailyMessageCap);
+      payload.clientSourceProvider = form.clientSourceProvider === '' ? null : form.clientSourceProvider;
       await aiAgentsService.update(agent.id, payload);
       toast.success('Salvo');
       queryClient.invalidateQueries({ queryKey: ['ai-agent', agent.id] });
@@ -614,6 +619,35 @@ export function GeneralTab({ agent }: { agent: AiAgent }) {
           checked={form.sendTypingIndicator}
           onChange={(v) => update('sendTypingIndicator', v)}
         />
+      </AgentSection>
+
+      <AgentSection
+        title="Filtro por cliente CRM"
+        description="Limita o agente a responder apenas se o telefone do contato estiver cadastrado num CRM. Útil pra agentes pós-venda."
+      >
+        <ToggleField
+          label="Requer cliente cadastrado em CRM"
+          hint="Se ligado, o agente fica em silêncio quando o telefone do contato NÃO existe no CRM selecionado abaixo."
+          checked={form.requiresClientMatch}
+          onChange={(v) => update('requiresClientMatch', v)}
+        />
+        {form.requiresClientMatch && (
+          <div className="space-y-2">
+            <label htmlFor="clientSourceProvider" className="text-sm font-medium">CRM Provider</label>
+            <select
+              id="clientSourceProvider"
+              value={form.clientSourceProvider}
+              onChange={(e) => update('clientSourceProvider', e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">Selecione…</option>
+              <option value="ZOHO_CRM">Zoho CRM</option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Configure a conexão em <a href="/settings/integrations/zoho" className="text-primary hover:underline">Configurações → Integrações → Zoho CRM</a>.
+            </p>
+          </div>
+        )}
       </AgentSection>
 
       <AgentStickySaveBar

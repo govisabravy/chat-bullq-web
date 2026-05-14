@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Bot, MessageSquare, Tag, Users, Bell } from "lucide-react";
+import { Bot, MessageSquare, Tag, Users, Bell, Plug } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -12,6 +12,7 @@ const items = [
   { href: "/settings/tags", label: "Tags", icon: Tag },
   { href: "/settings/members", label: "Membros", icon: Users },
   { href: "/settings/notifications", label: "Notificações", icon: Bell },
+  { href: "/settings/integrations/zoho", label: "Zoho CRM", icon: Plug },
 ];
 
 function SettingsNavLink({
