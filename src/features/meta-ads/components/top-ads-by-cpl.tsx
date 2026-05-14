@@ -1,22 +1,21 @@
 'use client';
 
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { ResponsivePie } from '@nivo/pie';
 import { useRouter } from 'next/navigation';
-import { ChartTooltip } from '@/features/dashboard/components/chart-tooltip';
 import { TopAdByCpl } from '../services/meta-ads.service';
 import { formatCurrency, formatNumberCompact } from '../utils/format';
 
-const COLORS = [
-  'oklch(0.72 0.17 150)',
-  'oklch(0.68 0.15 230)',
-  'oklch(0.62 0.2 290)',
-  'oklch(0.78 0.16 85)',
-  'oklch(0.68 0.18 25)',
-  'oklch(0.65 0.15 195)',
-  'oklch(0.7 0.16 60)',
-  'oklch(0.6 0.18 320)',
-  'oklch(0.74 0.13 130)',
-  'oklch(0.66 0.17 280)',
+const PALETTE = [
+  '#10b981',
+  '#3b82f6',
+  '#a855f7',
+  '#f59e0b',
+  '#ef4444',
+  '#14b8a6',
+  '#f97316',
+  '#ec4899',
+  '#84cc16',
+  '#8b5cf6',
 ];
 
 interface TopAdsByCplProps {
@@ -29,7 +28,7 @@ export function TopAdsByCpl({ ads, currency, loading }: TopAdsByCplProps) {
   const router = useRouter();
 
   if (loading) {
-    return <div className="h-72 animate-pulse rounded-lg border border-border bg-muted/40" />;
+    return <div className="h-80 animate-pulse rounded-lg border border-border bg-muted/40" />;
   }
 
   if (ads.length === 0) {
@@ -40,80 +39,96 @@ export function TopAdsByCpl({ ads, currency, loading }: TopAdsByCplProps) {
     );
   }
 
-  const chartData = ads.map((a) => ({
-    name: a.name,
+  const chartData = ads.map((a, i) => ({
+    id: a.adId ?? a.name,
+    label: a.name,
     value: parseFloat(a.cpl),
+    color: PALETTE[i % PALETTE.length],
   }));
 
+  const totalLeads = ads.reduce((s, a) => s + a.leads, 0);
+  const totalSpend = ads.reduce((s, a) => s + parseFloat(a.spend), 0);
+  const avgCpl = totalLeads > 0 ? totalSpend / totalLeads : 0;
+
   return (
-    <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
-      <div className="h-48 lg:h-auto">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={chartData}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={40}
-              outerRadius={75}
-              paddingAngle={2}
-            >
-              {chartData.map((_, i) => (
-                <Cell key={i} fill={COLORS[i % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip content={<ChartTooltip />} />
-          </PieChart>
-        </ResponsiveContainer>
+    <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+      <div className="relative h-72">
+        <ResponsivePie
+          data={chartData}
+          colors={{ datum: 'data.color' }}
+          margin={{ top: 12, right: 12, bottom: 12, left: 12 }}
+          innerRadius={0.62}
+          padAngle={1.2}
+          cornerRadius={4}
+          activeOuterRadiusOffset={10}
+          activeInnerRadiusOffset={4}
+          borderWidth={0}
+          enableArcLabels={false}
+          enableArcLinkLabels={false}
+          animate
+          motionConfig="gentle"
+          tooltip={({ datum }) => (
+            <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-soft">
+              <div className="font-medium">{datum.label}</div>
+              <div className="mt-1 text-muted-foreground">
+                CPL: <span className="font-mono text-foreground">{formatCurrency(datum.value, currency)}</span>
+              </div>
+            </div>
+          )}
+          theme={{
+            text: { fontFamily: 'inherit', fontSize: 11 },
+          }}
+        />
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            CPL médio
+          </div>
+          <div className="text-xl font-semibold tracking-tight">
+            {formatCurrency(avgCpl, currency)}
+          </div>
+          <div className="mt-0.5 text-[10px] text-muted-foreground">
+            {formatNumberCompact(totalLeads)} leads · {ads.length} ads
+          </div>
+        </div>
       </div>
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-xs">
-          <thead className="bg-muted/40 uppercase text-muted-foreground">
-            <tr>
-              <th className="w-2 px-2 py-1.5"></th>
-              <th className="px-2 py-1.5 text-left">Anúncio</th>
-              <th className="px-2 py-1.5 text-right">CPL</th>
-              <th className="px-2 py-1.5 text-right">Leads</th>
-              <th className="px-2 py-1.5 text-right">Spend</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {ads.map((a, i) => (
-              <tr
-                key={a.adId ?? a.name}
-                className={a.adId ? 'cursor-pointer hover:bg-muted/40' : ''}
-                onClick={() => a.adId && router.push(`/meta-ads/ads/${a.adId}`)}
-              >
-                <td className="px-2 py-1.5">
-                  <span
-                    className="inline-block h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                    aria-hidden
-                  />
-                </td>
-                <td className="px-2 py-1.5">
-                  <div className="flex items-center gap-2">
-                    {a.thumbnailUrl && (
-                      <img
-                        src={a.thumbnailUrl}
-                        alt=""
-                        className="h-6 w-6 flex-shrink-0 rounded border border-border object-cover"
-                      />
-                    )}
-                    <span className="truncate font-medium">{a.name}</span>
-                  </div>
-                </td>
-                <td className="px-2 py-1.5 text-right font-mono">{formatCurrency(a.cpl, currency)}</td>
-                <td className="px-2 py-1.5 text-right">{formatNumberCompact(a.leads)}</td>
-                <td className="px-2 py-1.5 text-right font-mono text-muted-foreground">
-                  {formatCurrency(a.spend, currency)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <div className="space-y-1.5">
+        {ads.map((a, i) => (
+          <button
+            key={a.adId ?? a.name}
+            type="button"
+            disabled={!a.adId}
+            onClick={() => a.adId && router.push(`/meta-ads/ads/${a.adId}`)}
+            className="group flex w-full items-center gap-3 rounded-md border border-transparent px-2 py-2 text-left text-xs transition-colors hover:border-border hover:bg-muted/40 disabled:cursor-not-allowed"
+          >
+            <span
+              className="h-3 w-3 flex-shrink-0 rounded-sm"
+              style={{ backgroundColor: PALETTE[i % PALETTE.length] }}
+              aria-hidden
+            />
+            {a.thumbnailUrl ? (
+              <img
+                src={a.thumbnailUrl}
+                alt=""
+                className="h-7 w-7 flex-shrink-0 rounded border border-border object-cover"
+              />
+            ) : (
+              <div className="h-7 w-7 flex-shrink-0 rounded border border-dashed border-border bg-muted/40" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium text-foreground">{a.name}</div>
+              <div className="text-[10px] text-muted-foreground">
+                {formatNumberCompact(a.leads)} leads · {formatCurrency(a.spend, currency)}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="font-mono text-sm font-semibold tabular-nums">
+                {formatCurrency(a.cpl, currency)}
+              </div>
+              <div className="text-[10px] text-muted-foreground">CPL</div>
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );
