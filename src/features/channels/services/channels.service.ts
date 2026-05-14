@@ -75,6 +75,11 @@ export const channelsService = {
     return data.data;
   },
 
+  async listWhatsappGroups(id: string): Promise<{ groups: Array<{ id: string; name: string; participants: number | null }>; error?: string }> {
+    const { data } = await api.get<{ data: { groups: Array<{ id: string; name: string; participants: number | null }>; error?: string } }>(`/channels/${id}/whatsapp-groups`);
+    return data.data;
+  },
+
   async remove(id: string): Promise<void> {
     await api.delete(`/channels/${id}`);
   },

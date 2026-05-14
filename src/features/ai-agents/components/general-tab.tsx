@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { aiAgentsService, type AiAgent, type AiProvider } from '../services/ai-agents.service';
+import { channelsService } from '@/features/channels/services/channels.service';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +52,9 @@ type FormState = {
   activationMode: 'ALL_CONVERSATIONS' | 'PER_CONVERSATION';
   requiresClientMatch: boolean;
   clientSourceProvider: 'ZOHO_CRM' | '';
+  notifyChannelId: string;
+  notifyTargetType: 'GROUP' | 'PHONE' | '';
+  notifyTarget: string;
 };
 
 function buildInitialForm(agent: AiAgent): FormState {
@@ -83,6 +87,9 @@ function buildInitialForm(agent: AiAgent): FormState {
     activationMode: agent.activationMode ?? 'ALL_CONVERSATIONS',
     requiresClientMatch: agent.requiresClientMatch ?? false,
     clientSourceProvider: (agent.clientSourceProvider ?? '') as 'ZOHO_CRM' | '',
+    notifyChannelId: (agent as any).notifyChannelId ?? '',
+    notifyTargetType: ((agent as any).notifyTargetType ?? '') as 'GROUP' | 'PHONE' | '',
+    notifyTarget: (agent as any).notifyTarget ?? '',
   };
 }
 
@@ -208,6 +215,9 @@ export function GeneralTab({ agent }: { agent: AiAgent }) {
       payload.dailyTokenCap = form.dailyTokenCap === '' ? null : Number(form.dailyTokenCap);
       payload.dailyMessageCap = form.dailyMessageCap === '' ? null : Number(form.dailyMessageCap);
       payload.clientSourceProvider = form.clientSourceProvider === '' ? null : form.clientSourceProvider;
+      payload.notifyChannelId = form.notifyChannelId === '' ? null : form.notifyChannelId;
+      payload.notifyTargetType = form.notifyTargetType === '' ? null : form.notifyTargetType;
+      payload.notifyTarget = form.notifyTarget === '' ? null : form.notifyTarget;
       await aiAgentsService.update(agent.id, payload);
       toast.success('Salvo');
       queryClient.invalidateQueries({ queryKey: ['ai-agent', agent.id] });
@@ -650,6 +660,13 @@ export function GeneralTab({ agent }: { agent: AiAgent }) {
         )}
       </AgentSection>
 
+      <NotifyWhatsappSection
+        notifyChannelId={form.notifyChannelId}
+        notifyTargetType={form.notifyTargetType}
+        notifyTarget={form.notifyTarget}
+        onUpdate={(k, v) => update(k as any, v)}
+      />
+
       <AgentStickySaveBar
         dirty={isDirty}
         saving={saving}
@@ -723,5 +740,171 @@ function ToggleField({
       </div>
       <Switch checked={checked} onChange={onChange} disabled={disabled} />
     </div>
+  );
+}
+
+function NotifyWhatsappSection({
+  notifyChannelId,
+  notifyTargetType,
+  notifyTarget,
+  onUpdate,
+}: {
+  notifyChannelId: string;
+  notifyTargetType: '' | 'GROUP' | 'PHONE';
+  notifyTarget: string;
+  onUpdate: (k: string, v: any) => void;
+}) {
+  const enabled = !!notifyChannelId && !!notifyTargetType && !!notifyTarget;
+  const { data: channels = [] } = useQuery({
+    queryKey: ['channels'],
+    queryFn: () => channelsService.list(),
+  });
+  const whatsappChannels = channels.filter((c: any) => c.type === 'WHATSAPP_ZAPPFY' && c.isActive);
+  const [groups, setGroups] = useState<Array<{ id: string; name: string; participants: number | null }>>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [groupsError, setGroupsError] = useState<string | null>(null);
+
+  const fetchGroups = async (channelId: string) => {
+    if (!channelId) return;
+    setLoadingGroups(true);
+    setGroupsError(null);
+    try {
+      const res = await channelsService.listWhatsappGroups(channelId);
+      setGroups(res.groups ?? []);
+      if (res.error) setGroupsError(res.error);
+    } catch (err: any) {
+      setGroupsError(err?.message ?? 'Erro');
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
+  useEffect(() => {
+    if (notifyChannelId && notifyTargetType === 'GROUP') {
+      fetchGroups(notifyChannelId);
+    }
+  }, [notifyChannelId, notifyTargetType]);
+
+  return (
+    <AgentSection
+      title="Notificações WhatsApp"
+      description="Quando esse agente fizer handoff humano (ou outra notificação relevante), envia uma mensagem pra um grupo ou número via uma instância WhatsApp da sua organização."
+    >
+      <ToggleField
+        label="Notificar via WhatsApp"
+        hint="Configure abaixo qual instância usa e pra onde envia (grupo ou número)."
+        checked={enabled}
+        onChange={(v) => {
+          if (!v) {
+            onUpdate('notifyChannelId', '');
+            onUpdate('notifyTargetType', '');
+            onUpdate('notifyTarget', '');
+          } else if (whatsappChannels.length > 0 && !notifyChannelId) {
+            onUpdate('notifyChannelId', whatsappChannels[0].id);
+            onUpdate('notifyTargetType', 'GROUP');
+          }
+        }}
+      />
+
+      {(notifyChannelId || notifyTargetType) && (
+        <div className="md:col-span-2 space-y-4 rounded-md border border-border bg-muted/20 p-4">
+          <div className="space-y-2">
+            <Label>Instância WhatsApp</Label>
+            <select
+              value={notifyChannelId}
+              onChange={(e) => {
+                onUpdate('notifyChannelId', e.target.value);
+                setGroups([]);
+              }}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">Selecione…</option>
+              {whatsappChannels.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {whatsappChannels.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Nenhuma instância WhatsApp ativa. Configure em <a href="/settings/channels" className="text-primary hover:underline">Configurações → Canais</a>.
+              </p>
+            )}
+          </div>
+
+          {notifyChannelId && (
+            <div className="space-y-2">
+              <Label>Tipo de destino</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onUpdate('notifyTargetType', 'GROUP')}
+                  className={`inline-flex h-9 flex-1 items-center justify-center rounded-md border px-3 text-sm transition-colors ${
+                    notifyTargetType === 'GROUP'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-input bg-background hover:bg-accent'
+                  }`}
+                >
+                  Grupo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdate('notifyTargetType', 'PHONE')}
+                  className={`inline-flex h-9 flex-1 items-center justify-center rounded-md border px-3 text-sm transition-colors ${
+                    notifyTargetType === 'PHONE'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-input bg-background hover:bg-accent'
+                  }`}
+                >
+                  Número
+                </button>
+              </div>
+            </div>
+          )}
+
+          {notifyChannelId && notifyTargetType === 'GROUP' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Grupo</Label>
+                <button
+                  type="button"
+                  onClick={() => fetchGroups(notifyChannelId)}
+                  disabled={loadingGroups}
+                  className="inline-flex h-7 items-center gap-1 rounded-md border border-input bg-background px-2 text-xs hover:bg-accent disabled:opacity-50"
+                >
+                  {loadingGroups ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Recarregar'}
+                </button>
+              </div>
+              <select
+                value={notifyTarget}
+                onChange={(e) => onUpdate('notifyTarget', e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">{loadingGroups ? 'Carregando…' : 'Selecione um grupo'}</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} {g.participants ? `(${g.participants})` : ''}
+                  </option>
+                ))}
+              </select>
+              {groupsError && (
+                <p className="text-xs text-destructive">{groupsError}</p>
+              )}
+            </div>
+          )}
+
+          {notifyChannelId && notifyTargetType === 'PHONE' && (
+            <div className="space-y-2">
+              <Label>Número (com DDI, ex: 5511999999999)</Label>
+              <input
+                type="tel"
+                value={notifyTarget}
+                onChange={(e) => onUpdate('notifyTarget', e.target.value)}
+                placeholder="5511999999999"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </AgentSection>
   );
 }

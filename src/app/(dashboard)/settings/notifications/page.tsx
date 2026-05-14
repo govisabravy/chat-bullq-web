@@ -127,7 +127,6 @@ function SkeletonRows({ count = 5 }: { count?: number }) {
 export default function SettingsNotificationsPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
-  const userEmail = user?.email ?? '...';
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: PREFS_QUERY_KEY,
@@ -141,7 +140,6 @@ export default function SettingsNotificationsPage() {
   );
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
-  const [testingEmail, setTestingEmail] = useState(false);
   const [testingPush, setTestingPush] = useState(false);
 
   useEffect(() => {
@@ -211,17 +209,6 @@ export default function SettingsNotificationsPage() {
     }
   };
 
-  const handleTestEmail = async () => {
-    setTestingEmail(true);
-    try {
-      await notificationsService.testEmail();
-      toast.success('Email de teste enviado');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao enviar email teste');
-    } finally {
-      setTestingEmail(false);
-    }
-  };
 
   const handleTestPush = async () => {
     setTestingPush(true);
@@ -267,29 +254,6 @@ export default function SettingsNotificationsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Notificações</h1>
         <p className="text-sm text-muted-foreground">Controle alertas por canal.</p>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Email</CardTitle>
-          <CardDescription>Enviado para {userEmail}.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoading ? (
-            <SkeletonRows count={ALL_TYPES.length} />
-          ) : (
-            ALL_TYPES.map((type, idx) => (
-              <div key={type} className="space-y-4">
-                <ToggleField
-                  label={TYPE_LABELS[type]}
-                  checked={prefs[type].email}
-                  onChange={(v) => updateField(type, 'email', v)}
-                />
-                {idx < ALL_TYPES.length - 1 ? <Separator /> : null}
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -343,9 +307,6 @@ export default function SettingsNotificationsPage() {
           <CardDescription>Dispare uma notificação de teste para si mesmo.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          <Button variant="outline" size="sm" loading={testingEmail} onClick={handleTestEmail}>
-            Enviar email teste
-          </Button>
           <Button variant="outline" size="sm" loading={testingPush} onClick={handleTestPush}>
             Enviar push teste
           </Button>
