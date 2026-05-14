@@ -19,7 +19,7 @@ export function FunnelChart({ impressions, clicks, conversions }: FunnelChartPro
   const stages: Stage[] = [
     { label: 'Impressões', value: impressions, color: 'oklch(0.68 0.15 230)' },
     { label: 'Clicks', value: clicks, color: 'oklch(0.72 0.17 150)' },
-    { label: 'Conversões', value: conversions, color: 'oklch(0.62 0.2 290)' },
+    { label: 'Leads', value: conversions, color: 'oklch(0.62 0.2 290)' },
   ];
 
   const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;

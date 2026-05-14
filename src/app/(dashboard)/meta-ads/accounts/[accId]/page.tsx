@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   DollarSign, AlertCircle,
-  Percent, BarChart3, TrendingUp, Download, UserPlus, DollarSign as Money, Repeat, Target,
+  Percent, BarChart3, Download, UserPlus, DollarSign as Money, Repeat,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAdAccount } from '@/features/meta-ads/hooks/use-ad-accounts';
@@ -96,14 +96,12 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
     const spend = parseFloat(totals.spend) || 0;
     const leads = totals.leads;
     const reach = totals.reach;
-    const convVal = parseFloat(totals.conversionValue) || 0;
     return {
       ctr: impr > 0 ? (clicks / impr) * 100 : 0,
       cpc: clicks > 0 ? spend / clicks : 0,
       cpm: impr > 0 ? (spend / impr) * 1000 : 0,
       cpl: leads > 0 ? spend / leads : null,
       frequency: reach > 0 ? impr / reach : 0,
-      roas: spend > 0 ? convVal / spend : null,
     };
   }, [totals]);
 
@@ -117,8 +115,6 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
       Clicks: c.metrics.clicks,
       CTR: c.metrics.ctr,
       CPC: c.metrics.cpc,
-      Conversoes: c.metrics.conversions,
-      ROAS: c.metrics.roas ?? '',
     }));
     const csv = toCSV(rows);
     const filename = `meta-ads-${accId}-${from}-${to}.csv`;
@@ -153,7 +149,7 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <MetricCard
           label="Gasto"
           value={totals ? formatCurrency(totals.spend, currency) : '—'}
@@ -185,17 +181,6 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
           label="Frequência"
           value={derived ? derived.frequency.toFixed(2) : '—'}
           icon={<Repeat className="h-4 w-4" />}
-        />
-        <MetricCard
-          label="Conversões"
-          value={totals?.conversions ?? 0}
-          delta={delta?.conversions}
-          icon={<Target className="h-4 w-4" />}
-        />
-        <MetricCard
-          label="ROAS"
-          value={derived?.roas !== null && derived?.roas !== undefined ? `${derived.roas.toFixed(2)}x` : '—'}
-          icon={<TrendingUp className="h-4 w-4" />}
         />
       </div>
 
@@ -242,16 +227,15 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
         </Card>
       </div>
 
-      {/* Funnel + Top campaigns */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardContent className="p-5">
-            <h3 className="text-sm font-semibold">Funil de conversão</h3>
+            <h3 className="text-sm font-semibold">Funil Impressões → Clicks → Leads</h3>
             <div className="mt-4">
               <FunnelChart
                 impressions={totals?.impressions ?? 0}
                 clicks={totals?.clicks ?? 0}
-                conversions={totals?.conversions ?? 0}
+                conversions={totals?.leads ?? 0}
               />
             </div>
           </CardContent>
