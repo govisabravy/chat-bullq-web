@@ -32,45 +32,53 @@ export function ChatDrawer({ accountId, open, onOpenChange }:
       {open && (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-black/30"
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => onOpenChange(false)}
           />
           <motion.aside
-            className="fixed bottom-0 right-0 top-0 z-50 flex w-full flex-col border-l border-border bg-card text-foreground sm:w-[480px]"
+            className="fixed bottom-0 right-0 top-0 z-50 flex w-full flex-col overflow-hidden border-l border-white/[0.06] bg-[#0A0A0B] text-white sm:w-[520px]"
             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 280 }}
           >
-            <ChatHeader
-              accountId={accountId}
-              sessions={sessions ?? []}
-              activeId={activeId}
-              onPick={setActiveId}
-              onClose={() => onOpenChange(false)}
-              onNew={async () => {
-                const created = await createSession.mutateAsync(undefined);
-                setActiveId(created.id);
-              }}
-            />
-            <ChatMessages
-              sessionId={activeId}
-              partial={send.partial}
-              streaming={send.streaming}
-              toolCalls={send.toolCalls}
-            />
-            {send.error?.code === 'NEEDS_KEY' && send.error.provider && (
-              <ChatNeedsKeyForm
-                provider={send.error.provider}
-                onSaved={() => send.clearError()}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div className="absolute -top-20 left-1/4 h-72 w-72 rounded-full bg-violet-500/10 mix-blend-normal blur-[128px] animate-pulse" />
+              <div className="absolute -bottom-20 right-1/4 h-72 w-72 rounded-full bg-indigo-500/10 mix-blend-normal blur-[128px] animate-pulse [animation-delay:700ms]" />
+              <div className="absolute top-1/3 right-1/3 h-48 w-48 rounded-full bg-fuchsia-500/10 mix-blend-normal blur-[96px] animate-pulse [animation-delay:1000ms]" />
+            </div>
+
+            <div className="relative z-10 flex h-full flex-col">
+              <ChatHeader
+                accountId={accountId}
+                sessions={sessions ?? []}
+                activeId={activeId}
+                onPick={setActiveId}
+                onClose={() => onOpenChange(false)}
+                onNew={async () => {
+                  const created = await createSession.mutateAsync(undefined);
+                  setActiveId(created.id);
+                }}
               />
-            )}
-            <ChatInput
-              disabled={send.streaming}
-              onSend={async (msg, model) => {
-                const id = await ensureSession();
-                if (id) await send.send(msg, model);
-              }}
-            />
+              <ChatMessages
+                sessionId={activeId}
+                partial={send.partial}
+                streaming={send.streaming}
+                toolCalls={send.toolCalls}
+              />
+              {send.error?.code === 'NEEDS_KEY' && send.error.provider && (
+                <ChatNeedsKeyForm
+                  provider={send.error.provider}
+                  onSaved={() => send.clearError()}
+                />
+              )}
+              <ChatInput
+                disabled={send.streaming}
+                onSend={async (msg, model) => {
+                  const id = await ensureSession();
+                  if (id) await send.send(msg, model);
+                }}
+              />
+            </div>
           </motion.aside>
         </>
       )}
