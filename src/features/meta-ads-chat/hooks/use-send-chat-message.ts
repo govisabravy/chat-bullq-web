@@ -79,6 +79,7 @@ export function useSendChatMessage(sessionId: string | null) {
   }, [sessionId, qc]);
 
   const abort = useCallback(() => abortRef.current?.abort(), []);
+  const clearError = useCallback(() => setState((s) => ({ ...s, error: null })), []);
 
-  return { ...state, send, abort };
+  return { ...state, send, abort, clearError };
 }

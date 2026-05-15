@@ -59,7 +59,10 @@ export function ChatDrawer({ accountId, open, onOpenChange }:
               toolCalls={send.toolCalls}
             />
             {send.error?.code === 'NEEDS_KEY' && send.error.provider && (
-              <ChatNeedsKeyForm provider={send.error.provider} />
+              <ChatNeedsKeyForm
+                provider={send.error.provider}
+                onSaved={() => send.clearError()}
+              />
             )}
             <ChatInput
               disabled={send.streaming}
