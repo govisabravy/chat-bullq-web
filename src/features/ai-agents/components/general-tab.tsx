@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, Maximize2 } from 'lucide-react';
 import { aiAgentsService, type AiAgent, type AiProvider } from '../services/ai-agents.service';
 import { channelsService } from '@/features/channels/services/channels.service';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { AgentStickySaveBar } from './agent-sticky-save-bar';
 
 const PROVIDERS: AiProvider[] = ['GEMINI', 'OPENAI', 'ANTHROPIC', 'OPENROUTER'];
@@ -257,20 +264,10 @@ export function GeneralTab({ agent }: { agent: AiAgent }) {
             placeholder="Opcional"
           />
         </Field>
-        <Field
-          label="System prompt"
-          htmlFor="agent-system-prompt"
-          full
-          hint="Variáveis: {contactName} {contactPhone} {protocol} {currentDate} {currentTime}"
-        >
-          <Textarea
-            id="agent-system-prompt"
-            value={form.systemPrompt}
-            onChange={(e) => update('systemPrompt', e.target.value)}
-            rows={6}
-            className="font-mono text-xs leading-relaxed"
-          />
-        </Field>
+        <PromptEditorField
+          value={form.systemPrompt}
+          onChange={(v) => update('systemPrompt', v)}
+        />
         <Field
           label="Mensagem de boas-vindas"
           htmlFor="agent-welcome"
@@ -739,6 +736,80 @@ function ToggleField({
         {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       </div>
       <Switch checked={checked} onChange={onChange} disabled={disabled} />
+    </div>
+  );
+}
+
+function PromptEditorField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const lines = value.split('\n').length;
+  const chars = value.length;
+
+  const openModal = useCallback(() => {
+    setDraft(value);
+    setOpen(true);
+  }, [value]);
+
+  const apply = () => {
+    onChange(draft);
+    setOpen(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 md:col-span-2">
+      <div className="flex items-center justify-between">
+        <Label htmlFor="agent-system-prompt">System prompt</Label>
+        <button
+          type="button"
+          onClick={openModal}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Maximize2 className="h-3 w-3" />
+          Expandir editor
+        </button>
+      </div>
+      <Textarea
+        id="agent-system-prompt"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={8}
+        className="font-mono text-xs leading-relaxed"
+      />
+      <p className="text-xs text-muted-foreground">
+        {chars.toLocaleString('pt-BR')} caracteres · {lines} linhas · Variáveis: {'{contactName}'} {'{contactPhone}'} {'{protocol}'} {'{currentDate}'} {'{currentTime}'}
+      </p>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent size="xl" className="flex max-h-[90vh] max-w-5xl flex-col">
+          <DialogHeader>
+            <DialogTitle>System Prompt</DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              {draft.length.toLocaleString('pt-BR')} caracteres · {draft.split('\n').length} linhas
+            </p>
+          </DialogHeader>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="flex-1 min-h-[60vh] w-full resize-none rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            autoFocus
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={apply}>
+              Aplicar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
