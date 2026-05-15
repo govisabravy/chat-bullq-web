@@ -4,12 +4,12 @@ import type { ChatMessage, ChatSession, ChatStreamEvent, KeySource, AiProvider }
 export const metaAdsChatService = {
   async listSessions(accountId: string): Promise<ChatSession[]> {
     const { data } = await api.get(`/meta-ads/accounts/${accountId}/chat/sessions`);
-    return data;
+    return data.data;
   },
 
   async createSession(accountId: string, title?: string): Promise<ChatSession> {
     const { data } = await api.post(`/meta-ads/accounts/${accountId}/chat/sessions`, { title });
-    return data;
+    return data.data;
   },
 
   async deleteSession(sessionId: string): Promise<void> {
@@ -18,12 +18,12 @@ export const metaAdsChatService = {
 
   async listMessages(sessionId: string): Promise<ChatMessage[]> {
     const { data } = await api.get(`/meta-ads/chat/sessions/${sessionId}/messages`);
-    return data;
+    return data.data;
   },
 
   async listKeys(): Promise<KeySource[]> {
     const { data } = await api.get('/meta-ads/chat/keys');
-    return data;
+    return data.data;
   },
 
   async upsertKey(provider: AiProvider, apiKey: string): Promise<void> {
