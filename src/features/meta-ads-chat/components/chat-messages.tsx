@@ -52,9 +52,44 @@ export function ChatMessages({ sessionId, partial, streaming, toolCalls }:
       {streaming && (
         <div className="space-y-1">
           {toolCalls.map((t, i) => <ToolCallChip key={`stream-tc-${i}`} call={t} />)}
-          <ChatMessage role="ASSISTANT" content={partial} streaming />
+          {partial
+            ? <ChatMessage role="ASSISTANT" content={partial} streaming />
+            : toolCalls.length === 0 && <ThinkingBubble />}
         </div>
       )}
+    </div>
+  );
+}
+
+function ThinkingBubble() {
+  return (
+    <div className="flex justify-start">
+      <div className="flex items-center gap-2 rounded-2xl bg-white/[0.04] border border-white/[0.06] px-3.5 py-2.5">
+        <div className="grid h-5 w-5 place-items-center rounded-md bg-gradient-to-br from-violet-500/30 to-indigo-500/30 border border-white/[0.08]">
+          <motion.div
+            className="h-1.5 w-1.5 rounded-full bg-violet-200"
+            animate={{ scale: [1, 1.4, 1], opacity: [0.6, 1, 0.6] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </div>
+        <span className="text-xs text-white/60">Pensando</span>
+        <TypingDots />
+      </div>
+    </div>
+  );
+}
+
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[0, 1, 2].map((i) => (
+        <motion.div
+          key={i}
+          className="h-1 w-1 rounded-full bg-white/70"
+          animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
+          transition={{ duration: 1, repeat: Infinity, delay: i * 0.15, ease: 'easeInOut' }}
+        />
+      ))}
     </div>
   );
 }

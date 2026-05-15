@@ -12,14 +12,27 @@ export function ChatDrawer({ accountId, open, onOpenChange }:
   { accountId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
   const { data: sessions } = useChatSessions(accountId);
   const createSession = useCreateChatSession(accountId);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveIdRaw] = useState<string | null>(null);
+
+  const lastKey = `meta-ads-chat:last:${accountId}`;
+  const setActiveId = (id: string | null) => {
+    setActiveIdRaw(id);
+    if (typeof window !== 'undefined' && id) localStorage.setItem(lastKey, id);
+  };
 
   useEffect(() => {
-    if (open && !activeId && sessions && sessions.length > 0) setActiveId(sessions[0].id);
-  }, [open, sessions, activeId]);
+    if (!open || activeId || !sessions || sessions.length === 0) return;
+    const remembered = typeof window !== 'undefined' ? localStorage.getItem(lastKey) : null;
+    const pick = (remembered && sessions.find((s) => s.id === remembered)) || sessions[0];
+    setActiveIdRaw(pick.id);
+  }, [open, sessions, activeId, lastKey]);
 
   async function ensureSession(): Promise<string | null> {
     if (activeId) return activeId;
+    if (sessions && sessions.length > 0) {
+      setActiveId(sessions[0].id);
+      return sessions[0].id;
+    }
     const created = await createSession.mutateAsync(undefined);
     setActiveId(created.id);
     return created.id;
