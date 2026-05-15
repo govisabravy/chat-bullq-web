@@ -1,10 +1,10 @@
-export function formatCurrency(value: string | number, currency = 'USD', locale = 'pt-BR'): string {
+export function formatCurrency(value: string | number, currency = 'BRL', locale = 'pt-BR'): string {
   const n = typeof value === 'string' ? parseFloat(value) : value;
   if (!isFinite(n)) return '—';
   return n.toLocaleString(locale, { style: 'currency', currency });
 }
 
-export function formatCurrencyCompact(value: string | number, currency = 'USD', locale = 'pt-BR'): string {
+export function formatCurrencyCompact(value: string | number, currency = 'BRL', locale = 'pt-BR'): string {
   const n = typeof value === 'string' ? parseFloat(value) : value;
   if (!isFinite(n)) return '—';
   if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toLocaleString(locale, { maximumFractionDigits: 1 })}M ${currencySymbol(currency)}`;

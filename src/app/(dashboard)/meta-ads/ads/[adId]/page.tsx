@@ -9,6 +9,7 @@ import { useTimeseries } from '@/features/meta-ads/hooks/use-insights';
 import { DateRangePicker, useDateRange } from '@/features/meta-ads/components/date-range-picker';
 import { MetricCard } from '@/features/meta-ads/components/metric-card';
 import { SpendOverTimeChart } from '@/features/meta-ads/components/spend-over-time-chart';
+import { formatCurrency } from '@/features/meta-ads/utils/format';
 
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
@@ -32,8 +33,7 @@ export default function AdDetailPage({ params }: { params: Promise<{ adId: strin
 
   const spendDisplay = useMemo(() => {
     if (!ad?.metrics?.spend) return '—';
-    const n = parseFloat(ad.metrics.spend);
-    return n.toLocaleString('pt-BR', { style: 'currency', currency: 'USD' });
+    return formatCurrency(ad.metrics.spend);
   }, [ad?.metrics?.spend]);
 
   if (!ad) {

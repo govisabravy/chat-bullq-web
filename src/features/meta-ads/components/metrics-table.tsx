@@ -1,6 +1,7 @@
 'use client';
 
 import { Metrics, MetaCampaignStatus } from '../services/meta-ads.service';
+import { formatCurrency, formatPercent } from '../utils/format';
 
 interface MetricsTableRow {
   id: string;
@@ -13,6 +14,7 @@ interface MetricsTableRow {
 interface MetricsTableProps<T extends MetricsTableRow> {
   items: T[];
   showObjective?: boolean;
+  currency?: string;
   onRowClick?: (row: T) => void;
   emptyLabel?: string;
 }
@@ -24,25 +26,14 @@ const STATUS_STYLES: Record<MetaCampaignStatus, string> = {
   DELETED: 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300',
 };
 
-function fmtCurrency(s: string): string {
-  const n = parseFloat(s);
-  if (!isFinite(n)) return s;
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'USD' });
-}
-
 function fmtNumber(n: number): string {
   return n.toLocaleString('pt-BR');
-}
-
-function fmtPercent(s: string): string {
-  const n = parseFloat(s);
-  if (!isFinite(n)) return s;
-  return `${n.toFixed(2)}%`;
 }
 
 export function MetricsTable<T extends MetricsTableRow>({
   items,
   showObjective,
+  currency = 'BRL',
   onRowClick,
   emptyLabel = 'Nenhum item no período.',
 }: MetricsTableProps<T>) {
@@ -90,13 +81,13 @@ export function MetricsTable<T extends MetricsTableRow>({
               {showObjective && (
                 <td className="px-3 py-2 text-xs text-muted-foreground">{row.objective ?? '—'}</td>
               )}
-              <td className="px-3 py-2 text-right">{fmtCurrency(row.metrics.spend)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrency(row.metrics.spend, currency)}</td>
               <td className="px-3 py-2 text-right">{fmtNumber(row.metrics.impressions)}</td>
               <td className="px-3 py-2 text-right">{fmtNumber(row.metrics.clicks)}</td>
-              <td className="px-3 py-2 text-right">{fmtPercent(row.metrics.ctr)}</td>
-              <td className="px-3 py-2 text-right">{fmtCurrency(row.metrics.cpc)}</td>
+              <td className="px-3 py-2 text-right">{formatPercent(row.metrics.ctr)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrency(row.metrics.cpc, currency)}</td>
               <td className="px-3 py-2 text-right">{fmtNumber(row.metrics.leads)}</td>
-              <td className="px-3 py-2 text-right">{row.metrics.cpl ? fmtCurrency(row.metrics.cpl) : '—'}</td>
+              <td className="px-3 py-2 text-right">{row.metrics.cpl ? formatCurrency(row.metrics.cpl, currency) : '—'}</td>
             </tr>
           ))}
         </tbody>

@@ -298,6 +298,7 @@ export default function AccountDashboardPage({ params }: { params: Promise<{ acc
           <MetricsTable
             items={filteredCampaigns}
             showObjective
+            currency={currency}
             onRowClick={(c) => router.push(`/meta-ads/campaigns/${c.id}`)}
             emptyLabel="Nenhuma campanha no período."
           />

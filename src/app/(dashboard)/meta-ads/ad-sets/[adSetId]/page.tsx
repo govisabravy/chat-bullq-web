@@ -12,6 +12,7 @@ import { DateRangePicker, useDateRange } from '@/features/meta-ads/components/da
 import { MetricCard } from '@/features/meta-ads/components/metric-card';
 import { MetricsTable } from '@/features/meta-ads/components/metrics-table';
 import { SpendOverTimeChart } from '@/features/meta-ads/components/spend-over-time-chart';
+import { formatCurrency } from '@/features/meta-ads/utils/format';
 
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
@@ -37,8 +38,7 @@ export default function AdSetDrillPage({ params }: { params: Promise<{ adSetId: 
 
   const spendDisplay = useMemo(() => {
     if (!adSet?.metrics?.spend) return '—';
-    const n = parseFloat(adSet.metrics.spend);
-    return n.toLocaleString('pt-BR', { style: 'currency', currency: 'USD' });
+    return formatCurrency(adSet.metrics.spend);
   }, [adSet?.metrics?.spend]);
 
   if (!adSet) {

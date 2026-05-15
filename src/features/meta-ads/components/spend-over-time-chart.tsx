@@ -7,9 +7,10 @@ import { TimeseriesPoint } from '../services/meta-ads.service';
 interface SpendOverTimeChartProps {
   data: TimeseriesPoint[];
   loading?: boolean;
+  currency?: string;
 }
 
-export function SpendOverTimeChart({ data, loading }: SpendOverTimeChartProps) {
+export function SpendOverTimeChart({ data, loading, currency = 'BRL' }: SpendOverTimeChartProps) {
   if (loading) {
     return <div className="h-64 animate-pulse rounded-lg border border-border bg-muted/40" />;
   }
@@ -29,7 +30,10 @@ export function SpendOverTimeChart({ data, loading }: SpendOverTimeChartProps) {
           />
           <YAxis
             tick={{ fontSize: 10 }}
-            tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(0)}`)}
+            tickFormatter={(v: number) => {
+              const sym = currency === 'BRL' ? 'R$' : '$';
+              return v >= 1000 ? `${sym}${(v / 1000).toFixed(1)}k` : `${sym}${v.toFixed(0)}`;
+            }}
           />
           <Tooltip content={<ChartTooltip />} />
           <Line
