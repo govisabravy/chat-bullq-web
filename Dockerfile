@@ -7,9 +7,9 @@ ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN NODE_ENV=development pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm build
+RUN NODE_ENV=production pnpm build
 
 FROM node:20-alpine AS runner
 RUN apk add --no-cache curl tini
